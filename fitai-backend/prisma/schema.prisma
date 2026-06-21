@@ -1,0 +1,376 @@
+// fitai-backend/prisma/schema.prisma
+//
+// هذا الملف يصف قاعدة البيانات بالكامل
+// كل model هنا = جدول في PostgreSQL
+// بعد أي تعديل عليه تحتاج تشغل: npm run db:migrate
+//
+// لتصفح البيانات بصرياً شغّل: npm run db:studio
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // هذا المتغير موجود في ملف .env
+  url      = env("DATABASE_URL")
+}
+
+// ─── 1. Users ─────────────────────────────────────────────────────────────────
+// الجدول الرئيسي للمستخدمين — يحتوي على بيانات الحساب والجسم والاشتراك
+model User {
+  id           String   @id @default(uuid())   // معرّف فريد تلقائي
+  email        String   @unique                // إيميل فريد — يُستخدم لتسجيل الدخول
+  passwordHash String                          // كلمة المرور مشفّرة بـ bcrypt
+  name         String                          // الاسم الكامل للعرض
+  role         String   @default("user")       // user | admin | coach
+
+  // بيانات الجسم — تُملأ بعد الإعداد مع الـ AI
+  age          Int?
+  height       Float?                          // بالسنتيمتر
+  weight       Float?                          // بالكيلوغرام
+  fitnessLevel String?                         // beginner | intermediate | advanced
+  goal         String?                         // weight_loss | muscle_gain | general_fitness
+  diseases     String?                         // أمراض أو إصابات يجب مراعاتها
+
+  // قياسات الجسم — اختيارية
+  chest        Float?
+  waist        Float?
+  hips         Float?
+  arms         Float?
+  legs         Float?
+
+  // حالة الاشتراك والحساب
+  plan         String   @default("free")       // free | premium
+  status       String   @default("active")     // active | disabled
+  hasSetup     Boolean  @default(false)        // هل أكمل الإعداد مع الـ AI؟
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // ── العلاقات — كل علاقة تُحمّل بـ include عند الحاجة ──────────────────────
+  workoutPlans    WorkoutPlan[]
+  dietPlans       DietPlan[]
+  progressEntries ProgressEntry[]
+  chatMessages    ChatMessage[]
+  mealLogs        DailyMealLog[]
+  exerciseNotes   ExerciseNote[]   // الملاحظات التي كتبها المدرب على تماريينه
+  mealNotes       MealNote[]       // الملاحظات التي كتبها المدرب على وجباته
+  coachAssignment CoachAssignment? // المدرب المُعيَّن له (بريميوم فقط)
+  messages        Message[]        // محادثة المستخدم مع مدربه
+
+  @@map("users") // اسم الجدول في قاعدة البيانات
+}
+
+// ─── 2. WorkoutPlan ───────────────────────────────────────────────────────────
+// خطة التمارين الأسبوعية التي يُنشئها الـ AI
+// المستخدم الواحد يمكن أن يكون لديه عدة خطط لكن واحدة فقط isActive = true
+model WorkoutPlan {
+  id        String   @id @default(uuid())
+  userId    String                            // ربط بجدول users
+  planName  String?                           // اسم اختياري للخطة
+  startDate DateTime @default(now())
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  // العلاقات
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercises WorkoutExercise[]
+
+  @@map("workout_plans")
+}
+
+// ─── 3. WorkoutExercise ───────────────────────────────────────────────────────
+// كل صف = تمرين واحد في يوم معين داخل خطة تمارين
+// مثلاً: بنش برس يوم الأحد في خطة رقم xyz
+model WorkoutExercise {
+  id          String  @id @default(uuid())
+  planId      String                          // ربط بجدول workout_plans
+  dayOfWeek   String                          // الأحد | الاثنين | الثلاثاء ...
+  dayType     String                          // training | rest
+  focus       String?                         // مثلاً "صدر وكتف"
+  nameAr      String                          // الاسم بالعربي للعرض
+  nameEn      String                          // الاسم بالإنجليزي — يُستخدم لجلب GIF من ExerciseDB
+  sets        String
+  reps        String
+  restSeconds Int     @default(60)            // وقت الراحة بين السيتات بالثواني
+  weight      String?                         // مثلاً "15/20/20 كغ" أو "وزن الجسم"
+  notes       String?                         // ملاحظة الـ AI على هذا التمرين
+  muscleGroup String
+  done        Boolean   @default(false)       // هل أنجز المستخدم هذا التمرين اليوم؟
+  doneAt      DateTime?                       // وقت إنجاز التمرين
+  sortOrder   Int       @default(0)           // ترتيب العرض داخل اليوم
+  coachEdited Boolean   @default(false)       // هل عدّل المدرب هذا التمرين؟
+
+  // العلاقات
+  plan          WorkoutPlan    @relation(fields: [planId], references: [id], onDelete: Cascade)
+  exerciseNotes ExerciseNote[] // ملاحظات المدرب على هذا التمرين تحديداً
+
+  @@map("workout_exercises")
+}
+
+// ─── 4. DietPlan ─────────────────────────────────────────────────────────────
+// خطة التغذية التي يُنشئها الـ AI — أهداف السعرات والماكروز اليومية
+model DietPlan {
+  id            String   @id @default(uuid())
+  userId        String
+  totalCalories Int                           // الهدف اليومي من السعرات
+  proteinGrams  Int                           // الهدف من البروتين بالغرام
+  carbsGrams    Int                           // الهدف من الكربوهيدرات بالغرام
+  fatGrams      Int                           // الهدف من الدهون بالغرام
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  // العلاقات
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  meals         DietMeal[]
+
+  @@map("diet_plans")
+}
+
+// ─── 5. DietMeal ─────────────────────────────────────────────────────────────
+// وجبة واحدة داخل خطة التغذية
+// مثلاً: وجبة الإفطار — 550 سعرة — بيض + خبز + حليب
+model DietMeal {
+  id       String   @id @default(uuid())
+  dietId   String
+  mealName String
+  mealTime String                             // مثلاً "7:00 ص"
+  mealType String                             // breakfast | lunch | dinner | snack | pre_workout
+  calories Int
+  proteinG Int
+  carbsG   Int
+  fatG     Int
+  items    String[]                           // مصفوفة عناصر الوجبة مثلاً ["بيض x3", "خبز أسمر"]
+  emoji    String?                            // رمز تعبيري للعرض مثلاً "☀️"
+  coachEdited Boolean @default(false)         // هل عدّل المدرب هذه الوجبة؟
+
+  // العلاقات
+  diet      DietPlan       @relation(fields: [dietId], references: [id], onDelete: Cascade)
+  logs      DailyMealLog[]
+  mealNotes MealNote[]
+
+  @@map("diet_meals")
+}
+
+// ─── 6. DailyMealLog ─────────────────────────────────────────────────────────
+// سجل الوجبات اليومية — ما أكله المستخدم فعلاً اليوم
+// يُعاد تلقائياً كل يوم جديد من الـ frontend
+model DailyMealLog {
+  id       String   @id @default(uuid())
+  userId   String
+  mealId   String?                            // nullable — للمستقبل لدعم وجبات مخصصة
+  name     String?                            // اسم الوجبة كما أدخله المستخدم أو من الخطة
+  source   String?                            // "plan" | "ai_analyzer" | "manual"
+  logDate  DateTime @db.Date                  // تاريخ اليوم بدون وقت
+  calories Int
+  proteinG Int
+  carbsG   Int
+  fatG     Int
+  loggedAt DateTime @default(now())
+
+  // العلاقات
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  meal     DietMeal? @relation(fields: [mealId], references: [id], onDelete: SetNull)
+
+  @@map("daily_meal_logs")
+}
+
+// ─── 7. ProgressEntry ────────────────────────────────────────────────────────
+// إدخال تقدم واحد — الوزن والقياسات في تاريخ معين
+// القيد الفريد: مستخدم واحد + تاريخ واحد = إدخال واحد فقط
+model ProgressEntry {
+  id        String   @id @default(uuid())
+  userId    String
+  entryDate DateTime @db.Date
+  weight    Float?
+  chest     Float?
+  waist     Float?
+  hips      Float?
+  arms      Float?
+  legs      Float?
+  notes     String?
+  createdAt DateTime @default(now())
+
+  // العلاقات
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, entryDate]) // يمنع تسجيل أكثر من إدخال في نفس اليوم لنفس المستخدم
+  @@map("progress_entries")
+}
+
+// ─── 8. ChatMessage ──────────────────────────────────────────────────────────
+// رسالة واحدة في سجل المحادثة مع الـ AI
+// role = "user" إذا كتبها المستخدم، "assistant" إذا ردّ الـ AI
+model ChatMessage {
+  id        String   @id @default(uuid())
+  userId    String
+  role      String                            // "user" | "assistant"
+  content   String                            // نص الرسالة
+  timestamp DateTime @default(now())
+
+  // العلاقات
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("chat_messages")
+}
+
+// ─── 9. Coach ────────────────────────────────────────────────────────────────
+// المدرب البشري — له حساب مستقل وبوابة خاصة /coach
+model Coach {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  specialty    String                         // strength | weight_loss | general_fitness
+  status       String   @default("active")   // pending | active | inactive | rejected
+  createdAt    DateTime @default(now())
+
+  // بيانات التحقق (للمدربين المسجّلين ذاتياً) — تبقى null للمدربين الذين أنشأهم الأدمن
+  bio             String?
+  yearsExperience Int?
+  certification   String?   // اسم/رقم الشهادة
+  profileImage    String?   // صورة الملف الشخصي (base64 data URL، مصغّرة)
+
+  // العلاقات
+  assignments   CoachAssignment[]
+  exerciseNotes ExerciseNote[]
+  mealNotes     MealNote[]
+  messages      Message[]
+  withdrawals   Withdrawal[]
+
+  @@map("coaches")
+}
+
+// ─── Withdrawal ──────────────────────────────────────────────────────────────
+// سحوبات المدرب من أرباحه (محاكاة — لا يُحوَّل مال حقيقي)
+model Withdrawal {
+  id        String   @id @default(uuid())
+  coachId   String
+  amount    Float
+  method    String                            // bank | paypal | wallet
+  createdAt DateTime @default(now())
+
+  coach     Coach    @relation(fields: [coachId], references: [id], onDelete: Cascade)
+
+  @@index([coachId])
+  @@map("withdrawals")
+}
+
+// ─── Message ─────────────────────────────────────────────────────────────────
+// محادثة مباشرة بين مستخدم بريميوم ومدربه المُعيَّن (سلسلة واحدة لكل ثنائي)
+model Message {
+  id         String   @id @default(uuid())
+  userId     String
+  coachId    String
+  senderRole String                          // user | coach — من أرسل الرسالة
+  text       String
+  read       Boolean  @default(false)        // هل قرأها الطرف المستقبِل؟
+  createdAt  DateTime @default(now())
+
+  user  User  @relation(fields: [userId],  references: [id], onDelete: Cascade)
+  coach Coach @relation(fields: [coachId], references: [id], onDelete: Cascade)
+
+  @@index([userId, coachId])
+  @@map("messages")
+}
+
+// ─── Notification ────────────────────────────────────────────────────────────
+// إشعارات لكل من المستخدمين والمدربين (المستقبِل قد يكون من جدولين مختلفين، لذا
+// نخزّن المعرّف والدور بدون علاقة مباشرة)
+model Notification {
+  id            String   @id @default(uuid())
+  recipientId   String                          // userId أو coachId
+  recipientRole String                          // user | coach
+  type          String                          // new_message | new_client
+  text          String
+  link          String?                         // مسار اختياري يفتح عند الضغط
+  read          Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  @@index([recipientId, recipientRole, read])
+  @@map("notifications")
+}
+
+// ─── 10. CoachAssignment ─────────────────────────────────────────────────────
+// ربط المدرب بالمستخدم — كل مستخدم بريميوم يمكن أن يكون له مدرب واحد فقط
+// القيد @unique على userId يضمن ذلك
+model CoachAssignment {
+  id         String   @id @default(uuid())
+  coachId    String
+  userId     String   @unique               // مستخدم واحد = مدرب واحد فقط
+  assignedAt DateTime @default(now())
+
+  // العلاقات
+  coach      Coach    @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId],  references: [id], onDelete: Cascade)
+
+  @@map("coach_assignments")
+}
+
+// ─── 11. ExerciseNote ────────────────────────────────────────────────────────
+// ملاحظة المدرب على تمرين محدد — تظهر للمستخدم في صفحة تفاصيل التمرين
+model ExerciseNote {
+  id         String   @id @default(uuid())
+  coachId    String
+  userId     String
+  exerciseId String
+  noteText   String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // العلاقات
+  coach      Coach           @relation(fields: [coachId],    references: [id], onDelete: Cascade)
+  user       User            @relation(fields: [userId],     references: [id], onDelete: Cascade)
+  exercise   WorkoutExercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+
+  @@map("exercise_notes")
+}
+
+// ─── 12. MealNote ────────────────────────────────────────────────────────────
+// ملاحظة المدرب على وجبة محددة — تظهر للمستخدم في صفحة التغذية
+model MealNote {
+  id        String   @id @default(uuid())
+  coachId   String
+  userId    String
+  mealId    String
+  noteText  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // العلاقات
+  coach     Coach    @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId],  references: [id], onDelete: Cascade)
+  meal      DietMeal @relation(fields: [mealId],  references: [id], onDelete: Cascade)
+
+  @@map("meal_notes")
+}
+
+// ─── 13. Admin ───────────────────────────────────────────────────────────────
+// المدير — جدول مستقل لأن المدراء لا يمرون عبر نفس منطق المستخدمين العاديين
+model Admin {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         String   @default("admin")   // admin | superadmin
+  createdAt    DateTime @default(now())
+
+  @@map("admins")
+}
+
+// ─── 14. ExerciseLibrary ─────────────────────────────────────────────────────
+// مكتبة التمارين العامة — يديرها الأدمن من لوحة التحكم
+// تُستخدم لاحقاً من المدرب عند تعديل خطة المستخدم
+model ExerciseLibrary {
+  id          String   @id @default(uuid())
+  nameAr      String
+  nameEn      String                         // يُستخدم لجلب GIF من ExerciseDB
+  muscleGroup String
+  equipment   String
+  level       String                         // beginner | intermediate | advanced
+  description String?
+  createdAt   DateTime @default(now())
+
+  @@map("exercise_library")
+}

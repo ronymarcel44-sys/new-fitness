@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { direction: rtl; scroll-behavior: smooth; }
+  body { @apply bg-bg font-tajawal text-slate-100 antialiased; }
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { @apply bg-bg-card; }
+  ::-webkit-scrollbar-thumb { @apply rounded-full bg-white/10; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-white/20; }
+}
+
+@layer components {
+  .card { @apply rounded-2xl border border-white/10 bg-bg-card p-5 transition-all duration-300; }
+  .card-hover { @apply hover:-translate-y-1 hover:border-accent/30 hover:bg-bg-hover cursor-pointer; }
+  .btn-primary { @apply rounded-xl bg-gradient-accent px-7 py-3.5 font-bold text-bg transition-all duration-300 hover:opacity-90 shadow-accent; }
+  .btn-secondary { @apply rounded-xl border border-white/10 bg-transparent px-7 py-3.5 font-semibold text-white transition-all duration-300 hover:border-white/30; }
+  .badge { @apply inline-flex items-center gap-2 rounded-full border border-accent/30 bg-accent/10 px-4 py-1.5 text-sm font-semibold text-accent; }
+  .section-label { @apply text-xs font-bold uppercase tracking-widest text-accent; }
+  .gradient-text { @apply bg-gradient-hero bg-clip-text text-transparent; }
+  .grid-bg {
+    background-image: linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+    background-size: 60px 60px;
+  }
+  .glow { box-shadow: 0 0 40px rgba(0,229,160,0.25); }
+  .glow-lg { box-shadow: 0 0 60px rgba(0,229,160,0.35); }
+  .input-base { @apply w-full rounded-xl border border-white/10 bg-bg px-5 py-3.5 text-sm text-white placeholder:text-slate-600 outline-none transition-all focus:border-accent/60; }
+}
