@@ -19,5 +19,3 @@ Thumbs.db
 *.log
 
 # ── AI assistant tooling (kept private) ───────────────────────
-.claude/
-CLAUDE.md
