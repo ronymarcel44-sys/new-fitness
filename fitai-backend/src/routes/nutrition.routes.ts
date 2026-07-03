@@ -105,7 +105,7 @@ router.get("/logs", async (req: Request, res: Response): Promise<void> => {
 // Adds a meal to today's log. Used when the user taps "log this meal"
 // or manually adds a custom meal they ate.
 router.post("/logs", async (req: Request, res: Response): Promise<void> => {
-  const { mealId, name, calories, protein, carbs, fat } = req.body;
+  const { mealId, name, source, calories, protein, carbs, fat } = req.body;
 
   const todayStart = new Date();
   todayStart.setUTCHours(0, 0, 0, 0);
@@ -114,6 +114,8 @@ router.post("/logs", async (req: Request, res: Response): Promise<void> => {
     data: {
       userId:   req.user!.userId,
       mealId:   mealId || null,
+      name:     name   || null,   // persist so the real name survives a refresh
+      source:   source || null,
       logDate:  todayStart,
       calories: Number(calories)        || 0,
       proteinG: Number(protein)         || 0,
@@ -122,7 +124,7 @@ router.post("/logs", async (req: Request, res: Response): Promise<void> => {
     },
   });
 
-  res.status(201).json({ ...log, name }); // return name so frontend can display it
+  res.status(201).json(log); // log now includes the stored name
 });
 
 // ── DELETE /nutrition/logs/:id ────────────────────────────────────────────────

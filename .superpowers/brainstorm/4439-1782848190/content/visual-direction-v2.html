@@ -1,0 +1,99 @@
+<h2>اختار الطابع البصري للـ Landing Page</h2>
+<p class="subtitle">كل خيار يحدد نوع الصور والأنيميشن اللي نستخدمه</p>
+
+<div class="cards">
+
+  <!-- Option A: Bold Athletic with real photo -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="position:relative;min-height:240px;border-radius:8px;overflow:hidden;">
+      <!-- simulated photo background -->
+      <div style="position:absolute;inset:0;background:linear-gradient(135deg,#0a0e1a 0%,#1a2236 50%,#0a0e1a 100%);"></div>
+      <!-- dark overlay -->
+      <div style="position:absolute;inset:0;background:rgba(10,14,26,0.65);"></div>
+      <!-- athlete emoji as photo stand-in -->
+      <div style="position:absolute;left:0;top:0;bottom:0;width:45%;display:flex;align-items:center;justify-content:center;font-size:70px;filter:grayscale(0.3);">🏋️‍♂️</div>
+      <!-- green glow over photo -->
+      <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 70% 40%,rgba(0,229,160,0.18),transparent 60%);"></div>
+      <!-- content -->
+      <div style="position:relative;z-index:2;padding:18px;text-align:right;">
+        <div style="font-size:9px;color:#00E5A0;font-weight:700;letter-spacing:3px;margin-bottom:6px;">AI FITNESS PLATFORM</div>
+        <div style="font-size:22px;font-weight:900;color:white;line-height:1.2;margin-bottom:6px;">حوّل جسمك<br><span style="color:#00E5A0;">بذكاء اصطناعي</span></div>
+        <p style="color:#94a3b8;font-size:10px;margin-bottom:14px;">خطة مخصصة لجسمك تماماً</p>
+        <div style="background:linear-gradient(135deg,#00E5A0,#00c987);color:#0A0E1A;padding:7px 16px;border-radius:8px;font-size:11px;font-weight:900;display:inline-block;box-shadow:0 0 20px rgba(0,229,160,0.4);">ابدأ مجاناً ←</div>
+      </div>
+      <!-- animated bar hint -->
+      <div style="position:absolute;bottom:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#00E5A0,#3B82F6,#A855F7);"></div>
+    </div>
+    <div class="card-body">
+      <h3>A — صورة رياضي + نص جريء</h3>
+      <p>صورة رياضي في الخلفية مع overlay داكن. نص كبير جريء على اليمين. أنيميشن: النص يظهر بـ slide-up، الأرقام تعدّ، الزر يتنفس glow. مثل Nike Training.</p>
+    </div>
+  </div>
+
+  <!-- Option B: Glassmorphism over gym photo -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="position:relative;min-height:240px;border-radius:8px;overflow:hidden;">
+      <div style="position:absolute;inset:0;background:linear-gradient(160deg,#0f172a,#1e1b4b,#0a0e1a);"></div>
+      <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 30% 60%,rgba(168,85,247,0.15),transparent 50%),radial-gradient(ellipse at 70% 30%,rgba(0,229,160,0.12),transparent 50%);"></div>
+      <!-- floating glass cards -->
+      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:16px;">
+        <div style="text-align:center;">
+          <div style="font-size:20px;font-weight:900;color:white;margin-bottom:4px;">مدرّبك الذكي 🤖</div>
+          <p style="color:#94a3b8;font-size:9px;margin-bottom:12px;">يتعلم منك ويتكيف معك</p>
+          <!-- glass card -->
+          <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);backdrop-filter:blur(12px);border-radius:12px;padding:10px 14px;margin-bottom:8px;text-align:right;">
+            <div style="font-size:9px;color:#00E5A0;margin-bottom:3px;">💪 تمرين اليوم</div>
+            <div style="font-size:11px;color:white;font-weight:700;">سكوات · 4 سيتات · 12 تكرار</div>
+            <div style="height:4px;background:rgba(0,229,160,0.15);border-radius:2px;margin-top:6px;overflow:hidden;"><div style="height:100%;width:65%;background:#00E5A0;border-radius:2px;"></div></div>
+          </div>
+          <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:12px;padding:10px 14px;text-align:right;">
+            <div style="font-size:9px;color:#A855F7;margin-bottom:3px;">🥗 خطة التغذية</div>
+            <div style="font-size:11px;color:white;font-weight:700;">1850 / 2200 سعرة</div>
+          </div>
+        </div>
+      </div>
+      <div style="position:absolute;bottom:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#A855F7,#3B82F6,#00E5A0);"></div>
+    </div>
+    <div class="card-body">
+      <h3>B — Glass Cards + خلفية جرادينت</h3>
+      <p>بطاقات زجاجية (glassmorphism) تطفو على خلفية gradient داكنة. أنيميشن: البطاقات تطفو ببطء للأعلى والأسفل، الـ progress bars تملأ نفسها عند التحميل. يبدو تقنياً وعصرياً.</p>
+    </div>
+  </div>
+
+  <!-- Option C: Cinematic full-bleed -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="position:relative;min-height:240px;border-radius:8px;overflow:hidden;">
+      <!-- cinematic dark background -->
+      <div style="position:absolute;inset:0;background:linear-gradient(180deg,#000 0%,#0a1628 40%,#0a0e1a 100%);"></div>
+      <!-- dramatic light beam -->
+      <div style="position:absolute;top:-20px;left:50%;transform:translateX(-50%);width:2px;height:140px;background:linear-gradient(180deg,rgba(0,229,160,0.8),transparent);box-shadow:0 0 30px rgba(0,229,160,0.4),0 0 60px rgba(0,229,160,0.2);"></div>
+      <div style="position:absolute;top:100px;left:50%;transform:translateX(-50%);width:200px;height:1px;background:linear-gradient(90deg,transparent,rgba(0,229,160,0.3),transparent);"></div>
+      <!-- content centered -->
+      <div style="position:relative;z-index:2;padding:20px;text-align:center;">
+        <div style="width:40px;height:40px;background:rgba(0,229,160,0.1);border:1px solid rgba(0,229,160,0.3);border-radius:50%;margin:0 auto 10px;display:flex;align-items:center;justify-content:center;font-size:18px;">⚡</div>
+        <div style="font-size:24px;font-weight:900;color:white;margin-bottom:6px;">FitAI</div>
+        <div style="font-size:11px;color:#00E5A0;letter-spacing:4px;margin-bottom:14px;font-weight:600;">ذكاء اصطناعي · لياقة حقيقية</div>
+        <p style="color:#64748b;font-size:10px;max-width:180px;margin:0 auto 16px;line-height:1.5;">أول مدرب ذكي يتحدث العربية ويفهم جسمك</p>
+        <!-- animated stats row -->
+        <div style="display:flex;justify-content:center;gap:14px;margin-bottom:14px;">
+          <div style="text-align:center;"><div style="font-size:16px;font-weight:900;color:#00E5A0;">500+</div><div style="font-size:8px;color:#475569;">مستخدم</div></div>
+          <div style="width:1px;background:rgba(255,255,255,0.1);"></div>
+          <div style="text-align:center;"><div style="font-size:16px;font-weight:900;color:#3B82F6;">AI</div><div style="font-size:8px;color:#475569;">مدرب ذكي</div></div>
+          <div style="width:1px;background:rgba(255,255,255,0.1);"></div>
+          <div style="text-align:center;"><div style="font-size:16px;font-weight:900;color:#A855F7;">مجاني</div><div style="font-size:8px;color:#475569;">للبداية</div></div>
+        </div>
+        <div style="background:linear-gradient(135deg,#00E5A0,#3B82F6);color:#0A0E1A;padding:8px 20px;border-radius:20px;font-size:11px;font-weight:900;display:inline-block;">ابدأ الرحلة الآن</div>
+      </div>
+      <div style="position:absolute;bottom:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#00E5A0,#3B82F6,#A855F7);"></div>
+    </div>
+    <div class="card-body">
+      <h3>C — Cinematic · شعاع ضوء + تأثيرات سينمائية</h3>
+      <p>خلفية سوداء سينمائية مع شعاع ضوء أخضر من الأعلى وأثر ضوئي. أنيميشن: شعاع الضوء ينبض، النص يظهر كـ typewriter، جزيئات صغيرة تتحرك. يبدو رهيباً وفريداً.</p>
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:24px;padding:14px;background:rgba(0,229,160,0.05);border:1px solid rgba(0,229,160,0.15);border-radius:10px;">
+  <p style="color:#94a3b8;font-size:12px;margin:0;text-align:center;">💡 يمكن نمزج أكثر من خيار — مثلاً صورة رياضي (A) مع كروت زجاجية (B)</p>
+</div>

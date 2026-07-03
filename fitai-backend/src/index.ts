@@ -19,8 +19,23 @@ const app  = express();
 const PORT = process.env.PORT ?? 3001;
 
 // Middleware
+// CORS — allow the configured frontend URL(s), plus any localhost / 127.0.0.1
+// origin (so it works whether the app is opened via localhost, 127.0.0.1, or a
+// different dev port). FRONTEND_URL may be a comma-separated list.
+const allowedOrigins = (process.env.FRONTEND_URL ?? "http://localhost:5173")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+
 app.use(cors({
-  origin:      process.env.FRONTEND_URL ?? "http://localhost:5173",
+  origin: (origin, callback) => {
+    // Allow non-browser clients (curl, mobile apps) that send no Origin header
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    // Any localhost / 127.0.0.1 origin (any port) is allowed in development
+    if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return callback(null, true);
+    return callback(new Error(`Not allowed by CORS: ${origin}`));
+  },
   credentials: true,
 }));
 app.use(express.json({ limit: "1mb" })); // increased for long AI plan responses

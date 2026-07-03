@@ -45,6 +45,22 @@ model User {
   status       String   @default("active")     // active | disabled
   hasSetup     Boolean  @default(false)        // هل أكمل الإعداد مع الـ AI؟
 
+  // سلسلة الالتزام — أيام نشاط متتالية + تاريخ آخر يوم نشط (YYYY-MM-DD)
+  streak         Int     @default(0)
+  lastActiveDate String?
+  bestStreak     Int     @default(0)   // أطول سلسلة وصل لها — لأوسمة الإنجازات
+
+  // تتبّع الهدف — الوزن المستهدف (فارغ = نحسب هدفاً تلقائياً)
+  targetWeight   Float?
+
+  // قيم البداية — تُجمَّد عند أول تسجيل ولا تتغيّر، لحساب التقدّم منذ البداية
+  startWeight    Float?
+  startChest     Float?
+  startWaist     Float?
+  startHips      Float?
+  startArms      Float?
+  startLegs      Float?
+
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -137,6 +153,7 @@ model DietMeal {
   mealName String
   mealTime String                             // مثلاً "7:00 ص"
   mealType String                             // breakfast | lunch | dinner | snack | pre_workout
+  dayOfWeek String?                            // الأحد..السبت — null للخطط القديمة (يوم واحد)
   calories Int
   proteinG Int
   carbsG   Int

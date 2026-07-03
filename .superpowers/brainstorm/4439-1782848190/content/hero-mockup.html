@@ -1,0 +1,132 @@
+<h2>معاينة الـ Hero Section — A + C</h2>
+<p class="subtitle">هذا تقريب لما ستبدو عليه الصفحة الفعلية مع الأنيميشن والصور</p>
+
+<div class="mockup">
+  <div class="mockup-header">Landing Page — Hero Section (full width simulation)</div>
+  <div class="mockup-body" style="padding:0;overflow:hidden;">
+
+    <!-- HERO SIMULATION -->
+    <div style="
+      position:relative;
+      min-height:500px;
+      background:#000;
+      overflow:hidden;
+      direction:rtl;
+      font-family:Tajawal,Arial,sans-serif;
+    ">
+
+      <!-- LAYER 1: Real athlete photo (Unsplash) -->
+      <img
+        src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=900&q=80&auto=format&fit=crop"
+        alt="athlete"
+        style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center top;opacity:0.35;"
+      />
+
+      <!-- LAYER 2: Dark gradient overlay — right side stays dark for text -->
+      <div style="position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,0.1) 0%,rgba(10,14,26,0.5) 40%,rgba(10,14,26,0.97) 65%,#0a0e1a 100%);"></div>
+
+      <!-- LAYER 3: Cinematic light beam from top-center-right -->
+      <div style="position:absolute;top:0;right:30%;width:2px;height:60%;background:linear-gradient(180deg,rgba(0,229,160,0.9),transparent);box-shadow:0 0 40px rgba(0,229,160,0.5),0 0 80px rgba(0,229,160,0.25);"></div>
+      <div style="position:absolute;top:0;right:30%;width:300px;height:1px;margin-right:-150px;background:linear-gradient(90deg,transparent,rgba(0,229,160,0.2),transparent);"></div>
+
+      <!-- LAYER 4: Floating particles simulation -->
+      <div style="position:absolute;top:15%;right:25%;width:4px;height:4px;background:#00E5A0;border-radius:50%;opacity:0.6;box-shadow:0 0 8px #00E5A0;"></div>
+      <div style="position:absolute;top:40%;right:18%;width:3px;height:3px;background:#3B82F6;border-radius:50%;opacity:0.5;box-shadow:0 0 6px #3B82F6;"></div>
+      <div style="position:absolute;top:60%;right:35%;width:2px;height:2px;background:#A855F7;border-radius:50%;opacity:0.7;box-shadow:0 0 6px #A855F7;"></div>
+      <div style="position:absolute;top:25%;right:45%;width:3px;height:3px;background:#00E5A0;border-radius:50%;opacity:0.4;box-shadow:0 0 8px #00E5A0;"></div>
+      <div style="position:absolute;top:70%;right:22%;width:4px;height:4px;background:#FF6B35;border-radius:50%;opacity:0.5;box-shadow:0 0 8px #FF6B35;"></div>
+
+      <!-- LAYER 5: Grid texture on the right dark area -->
+      <div style="position:absolute;top:0;left:0;width:45%;height:100%;background-image:linear-gradient(rgba(255,255,255,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.025) 1px,transparent 1px);background-size:40px 40px;"></div>
+
+      <!-- LAYER 6: Radial glow behind text -->
+      <div style="position:absolute;top:20%;left:5%;width:400px;height:300px;background:radial-gradient(ellipse,rgba(0,229,160,0.08),transparent 70%);"></div>
+
+      <!-- CONTENT — positioned on the right (RTL) -->
+      <div style="position:relative;z-index:10;padding:48px 40px;max-width:480px;margin-right:auto;">
+
+        <!-- Badge -->
+        <div style="display:inline-flex;align-items:center;gap:8px;background:rgba(0,229,160,0.1);border:1px solid rgba(0,229,160,0.3);border-radius:20px;padding:6px 14px;margin-bottom:24px;">
+          <div style="width:6px;height:6px;background:#00E5A0;border-radius:50%;box-shadow:0 0 8px #00E5A0;"></div>
+          <span style="color:#00E5A0;font-size:12px;font-weight:700;">مدرّبك الذكي متاح الآن</span>
+        </div>
+
+        <!-- Headline — typewriter feel -->
+        <h1 style="font-size:42px;font-weight:900;color:white;line-height:1.15;margin-bottom:16px;">
+          حوّل جسمك<br>
+          <span style="background:linear-gradient(135deg,#00E5A0,#3B82F6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">بالذكاء الاصطناعي</span><br>
+          <span style="color:rgba(255,255,255,0.85);">من أول يوم</span>
+        </h1>
+
+        <!-- Subtext -->
+        <p style="color:#94a3b8;font-size:15px;line-height:1.7;margin-bottom:32px;max-width:360px;">
+          برامج تمارين وتغذية مخصصة لجسمك وأهدافك — مع متابعة يومية وتعديل تلقائي بالـ AI.
+        </p>
+
+        <!-- CTA buttons -->
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:40px;">
+          <div style="background:linear-gradient(135deg,#00E5A0,#00c987);color:#0a0e1a;padding:14px 28px;border-radius:12px;font-size:15px;font-weight:900;box-shadow:0 0 30px rgba(0,229,160,0.4),0 0 60px rgba(0,229,160,0.2);cursor:pointer;">
+            ابدأ مجاناً ←
+          </div>
+          <div style="border:1px solid rgba(255,255,255,0.15);color:white;padding:14px 28px;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;">
+            شوف كيف يشتغل
+          </div>
+        </div>
+
+        <!-- Stats row -->
+        <div style="display:flex;gap:28px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:24px;font-weight:900;color:#00E5A0;">+500</div>
+            <div style="font-size:11px;color:#475569;margin-top:2px;">مستخدم نشط</div>
+          </div>
+          <div style="width:1px;background:rgba(255,255,255,0.08);"></div>
+          <div>
+            <div style="font-size:24px;font-weight:900;color:#3B82F6;">98%</div>
+            <div style="font-size:11px;color:#475569;margin-top:2px;">نسبة الرضا</div>
+          </div>
+          <div style="width:1px;background:rgba(255,255,255,0.08);"></div>
+          <div>
+            <div style="font-size:24px;font-weight:900;color:#A855F7;">7 أيام</div>
+            <div style="font-size:11px;color:#475569;margin-top:2px;">مجاناً للبدء</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scroll indicator -->
+      <div style="position:absolute;bottom:20px;left:50%;transform:translateX(-50%);text-align:center;z-index:10;">
+        <div style="width:20px;height:32px;border:2px solid rgba(255,255,255,0.2);border-radius:10px;margin:0 auto;display:flex;align-items:flex-start;justify-content:center;padding-top:4px;">
+          <div style="width:4px;height:8px;background:#00E5A0;border-radius:2px;opacity:0.8;"></div>
+        </div>
+        <div style="color:#475569;font-size:10px;margin-top:4px;">اسحب للأسفل</div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+<div style="margin-top:20px;" class="section">
+  <h3>الأنيميشن اللي سيُضاف فوق هذا الـ mockup</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
+    <div style="background:rgba(0,229,160,0.05);border:1px solid rgba(0,229,160,0.15);border-radius:8px;padding:12px;">
+      <div style="color:#00E5A0;font-size:12px;font-weight:700;margin-bottom:4px;">✦ عند تحميل الصفحة</div>
+      <div style="color:#94a3b8;font-size:11px;line-height:1.6;">النص يظهر كـ typewriter حرف حرف · الأرقام تعدّ من صفر · الـ badge يومض مرة</div>
+    </div>
+    <div style="background:rgba(59,130,246,0.05);border:1px solid rgba(59,130,246,0.15);border-radius:8px;padding:12px;">
+      <div style="color:#3B82F6;font-size:12px;font-weight:700;margin-bottom:4px;">✦ مستمر في الخلفية</div>
+      <div style="color:#94a3b8;font-size:11px;line-height:1.6;">الجزيئات تتحرك ببطء · شعاع الضوء ينبض · الـ glow يتنفس</div>
+    </div>
+    <div style="background:rgba(168,85,247,0.05);border:1px solid rgba(168,85,247,0.15);border-radius:8px;padding:12px;">
+      <div style="color:#A855F7;font-size:12px;font-weight:700;margin-bottom:4px;">✦ عند التمرير للأسفل</div>
+      <div style="color:#94a3b8;font-size:11px;line-height:1.6;">الصورة parallax تتحرك أبطأ من النص · الـ sections تنزلق للظهور</div>
+    </div>
+    <div style="background:rgba(255,107,53,0.05);border:1px solid rgba(255,107,53,0.15);border-radius:8px;padding:12px;">
+      <div style="color:#FF6B35;font-size:12px;font-weight:700;margin-bottom:4px;">✦ تفاعلي</div>
+      <div style="color:#94a3b8;font-size:11px;line-height:1.6;">الزر الرئيسي يتوهج عند hover · الـ mouse تخلق spotlight خفي في الخلفية</div>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:16px;padding:14px;background:rgba(0,229,160,0.05);border:1px solid rgba(0,229,160,0.15);border-radius:10px;">
+  <p style="color:#94a3b8;font-size:12px;margin:0;text-align:center;">هل هذا الاتجاه صح؟ وافق وننتقل لتصميم باقي الـ sections (Features + CTA)</p>
+</div>

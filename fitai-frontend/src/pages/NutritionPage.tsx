@@ -41,6 +41,8 @@ export function NutritionPage() {
   const dispatch = useAppDispatch();
   const { plan, dailyLog } = useAppSelector((s) => s.nutrition);
   const coachMealNotes = useAppSelector((s) => s.user.coachMealNotes);
+  const DAYS_AR_NUT = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+  const todayName   = DAYS_AR_NUT[new Date().getDay()];
 
   // Today vs week tab
   const [activeTab, setActiveTab] = useState<"today" | "week">("today");
@@ -95,6 +97,10 @@ export function NutritionPage() {
     warnings.push({ label: "الدهون",       over: consumed.fat      - plan.fat,           unit: "g"    });
 
   const allGood = dailyLog.length > 0 && warnings.length === 0;
+
+  // Names already logged today — used to flip a suggested meal's button to its
+  // "added" state (survives refresh because dailyLog is reloaded from the API).
+  const loggedNames = new Set(dailyLog.map((m) => m.name));
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
@@ -188,6 +194,13 @@ export function NutritionPage() {
     closeForm();
   };
 
+  // Add a suggested plan meal to today's log — a copy with a fresh id, keeping
+  // the plan's own time. "Already added" is matched by name (see loggedNames)
+  // so the button stays disabled after a refresh.
+  const handleAddSuggested = (meal: Meal) => {
+    dispatch(logMealThunk({ ...meal, id: crypto.randomUUID(), source: "plan" }));
+  };
+
   return (
     <div className="mx-auto max-w-4xl px-6 pb-20 pt-28">
       <h1 className="mb-2 text-4xl font-black">الخطة الغذائية 🍎</h1>
@@ -277,7 +290,7 @@ export function NutritionPage() {
       <Card className="mb-6">
         <h3 className="mb-4 font-bold">الوجبات المقترحة (من خطتك) 🍽️</h3>
         <div className="space-y-3">
-          {plan.meals.map((meal) => (
+          {plan.meals.filter((m) => !m.dayOfWeek || m.dayOfWeek === todayName).map((meal) => (
             <div key={meal.id} className="flex items-center gap-4 rounded-xl border border-white/5 bg-bg p-4">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/10 text-xl">
                 {meal.emoji}
@@ -312,6 +325,18 @@ export function NutritionPage() {
                   </div>
                 )}
               </div>
+              {loggedNames.has(meal.name) ? (
+                <span className="flex shrink-0 items-center gap-1.5 rounded-xl border border-white/10 px-3 py-2 text-xs font-semibold text-slate-500">
+                  <CheckCircle2 className="h-4 w-4 text-accent" /> تمت الإضافة
+                </span>
+              ) : (
+                <button
+                  onClick={() => handleAddSuggested(meal)}
+                  className="flex shrink-0 items-center gap-1.5 rounded-xl border border-accent/30 bg-accent/15 px-3 py-2 text-xs font-semibold text-accent transition-all hover:bg-accent/25"
+                >
+                  <Plus className="h-4 w-4" /> إضافة لليوم
+                </button>
+              )}
             </div>
           ))}
         </div>

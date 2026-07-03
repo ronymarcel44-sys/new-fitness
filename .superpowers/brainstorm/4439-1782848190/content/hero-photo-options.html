@@ -1,0 +1,114 @@
+<h2>اختار الصورة الخلفية للـ Hero</h2>
+<p class="subtitle">كل خيار يعطي إحساس مختلف — الـ overlay والتأثيرات ثابتة في كل الخيارات</p>
+
+<div class="cards">
+
+  <!-- Option A: Athlete + Gym -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="position:relative;min-height:280px;border-radius:8px;overflow:hidden;direction:rtl;font-family:Arial,sans-serif;">
+      <img src="https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=800&q=80&auto=format&fit=crop&crop=center" alt="gym athlete" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;opacity:0.4;"/>
+      <div style="position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,0.05) 0%,rgba(10,14,26,0.6) 45%,rgba(10,14,26,0.97) 70%,#0a0e1a 100%);"></div>
+      <!-- light beam -->
+      <div style="position:absolute;top:0;right:32%;width:2px;height:55%;background:linear-gradient(180deg,rgba(0,229,160,0.85),transparent);box-shadow:0 0 35px rgba(0,229,160,0.5),0 0 70px rgba(0,229,160,0.2);"></div>
+      <!-- particles -->
+      <div style="position:absolute;top:20%;right:28%;width:4px;height:4px;background:#00E5A0;border-radius:50%;box-shadow:0 0 8px #00E5A0;opacity:0.7;"></div>
+      <div style="position:absolute;top:55%;right:20%;width:3px;height:3px;background:#3B82F6;border-radius:50%;box-shadow:0 0 6px #3B82F6;opacity:0.6;"></div>
+      <div style="position:absolute;top:35%;right:42%;width:2px;height:2px;background:#A855F7;border-radius:50%;box-shadow:0 0 6px #A855F7;opacity:0.8;"></div>
+      <!-- content -->
+      <div style="position:relative;z-index:10;padding:28px 24px;max-width:280px;margin-right:auto;">
+        <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(0,229,160,0.1);border:1px solid rgba(0,229,160,0.3);border-radius:20px;padding:5px 12px;margin-bottom:16px;">
+          <div style="width:5px;height:5px;background:#00E5A0;border-radius:50%;box-shadow:0 0 6px #00E5A0;"></div>
+          <span style="color:#00E5A0;font-size:11px;font-weight:700;">مدرّبك الذكي متاح الآن</span>
+        </div>
+        <h1 style="font-size:28px;font-weight:900;color:white;line-height:1.2;margin-bottom:10px;">حوّل جسمك<br><span style="background:linear-gradient(135deg,#00E5A0,#3B82F6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">بالذكاء الاصطناعي</span></h1>
+        <p style="color:#94a3b8;font-size:11px;line-height:1.6;margin-bottom:16px;">خطة تمارين وتغذية مخصصة لجسمك</p>
+        <div style="background:linear-gradient(135deg,#00E5A0,#00c987);color:#0a0e1a;padding:10px 20px;border-radius:10px;font-size:12px;font-weight:900;display:inline-block;box-shadow:0 0 25px rgba(0,229,160,0.4);">ابدأ مجاناً ←</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — صالة الجيم 💪</h3>
+      <p>رياضي يرفع أثقال في صالة — واضح إنه تطبيق تمارين. قوي وجريء.</p>
+    </div>
+  </div>
+
+  <!-- Option B: Healthy food + fitness split -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="position:relative;min-height:280px;border-radius:8px;overflow:hidden;direction:rtl;font-family:Arial,sans-serif;">
+      <!-- Split: food on left, athlete on right -->
+      <div style="position:absolute;inset:0;display:flex;">
+        <div style="flex:1;overflow:hidden;position:relative;">
+          <img src="https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=400&q=80&auto=format&fit=crop&crop=center" alt="healthy food" style="width:100%;height:100%;object-fit:cover;opacity:0.45;"/>
+        </div>
+        <div style="flex:1;overflow:hidden;position:relative;">
+          <img src="https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=400&q=80&auto=format&fit=crop&crop=center" alt="athlete running" style="width:100%;height:100%;object-fit:cover;opacity:0.45;"/>
+        </div>
+      </div>
+      <!-- unified dark overlay -->
+      <div style="position:absolute;inset:0;background:linear-gradient(90deg,rgba(10,14,26,0.55) 0%,rgba(10,14,26,0.4) 50%,rgba(10,14,26,0.75) 80%,#0a0e1a 100%);"></div>
+      <!-- divider glow line in center -->
+      <div style="position:absolute;top:0;left:50%;width:1px;height:100%;background:linear-gradient(180deg,transparent,rgba(0,229,160,0.4),transparent);"></div>
+      <!-- light beam -->
+      <div style="position:absolute;top:0;right:30%;width:2px;height:55%;background:linear-gradient(180deg,rgba(0,229,160,0.85),transparent);box-shadow:0 0 35px rgba(0,229,160,0.5);"></div>
+      <!-- particles -->
+      <div style="position:absolute;top:18%;right:26%;width:4px;height:4px;background:#00E5A0;border-radius:50%;box-shadow:0 0 8px #00E5A0;opacity:0.7;"></div>
+      <div style="position:absolute;top:60%;left:25%;width:3px;height:3px;background:#FF6B35;border-radius:50%;box-shadow:0 0 6px #FF6B35;opacity:0.6;"></div>
+      <div style="position:absolute;top:40%;right:44%;width:2px;height:2px;background:#A855F7;border-radius:50%;box-shadow:0 0 6px #A855F7;opacity:0.8;"></div>
+      <!-- labels on the split -->
+      <div style="position:absolute;bottom:16px;left:50%;transform:translateX(-130%);background:rgba(255,107,53,0.15);border:1px solid rgba(255,107,53,0.3);border-radius:6px;padding:4px 8px;">
+        <span style="color:#FF6B35;font-size:9px;font-weight:700;">🥗 تغذية</span>
+      </div>
+      <div style="position:absolute;bottom:16px;left:50%;transform:translateX(30%);background:rgba(0,229,160,0.1);border:1px solid rgba(0,229,160,0.3);border-radius:6px;padding:4px 8px;">
+        <span style="color:#00E5A0;font-size:9px;font-weight:700;">💪 تمارين</span>
+      </div>
+      <!-- content -->
+      <div style="position:relative;z-index:10;padding:28px 24px;max-width:280px;margin-right:auto;">
+        <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(0,229,160,0.1);border:1px solid rgba(0,229,160,0.3);border-radius:20px;padding:5px 12px;margin-bottom:16px;">
+          <div style="width:5px;height:5px;background:#00E5A0;border-radius:50%;box-shadow:0 0 6px #00E5A0;"></div>
+          <span style="color:#00E5A0;font-size:11px;font-weight:700;">مدرّبك الذكي متاح الآن</span>
+        </div>
+        <h1 style="font-size:28px;font-weight:900;color:white;line-height:1.2;margin-bottom:10px;">تمارين وتغذية<br><span style="background:linear-gradient(135deg,#00E5A0,#FF6B35);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">في مكان واحد</span></h1>
+        <p style="color:#94a3b8;font-size:11px;line-height:1.6;margin-bottom:16px;">مدرّب ذكي يخطط لجسمك وطعامك معاً</p>
+        <div style="background:linear-gradient(135deg,#00E5A0,#00c987);color:#0a0e1a;padding:10px 20px;border-radius:10px;font-size:12px;font-weight:900;display:inline-block;box-shadow:0 0 25px rgba(0,229,160,0.4);">ابدأ مجاناً ←</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — تغذية + رياضة (split) 🥗💪</h3>
+      <p>الخلفية مقسومة: أكل صحي على اليسار، رياضي على اليمين. يوصل بسرعة إن التطبيق يغطي الاثنين.</p>
+    </div>
+  </div>
+
+  <!-- Option C: Running outdoor -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="position:relative;min-height:280px;border-radius:8px;overflow:hidden;direction:rtl;font-family:Arial,sans-serif;">
+      <img src="https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=800&q=80&auto=format&fit=crop&crop=center" alt="running outdoor" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.38;"/>
+      <div style="position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,0.05) 0%,rgba(10,14,26,0.55) 40%,rgba(10,14,26,0.97) 68%,#0a0e1a 100%);"></div>
+      <!-- orange cinematic beam (sunrise feel) -->
+      <div style="position:absolute;top:0;right:35%;width:2px;height:50%;background:linear-gradient(180deg,rgba(255,107,53,0.7),transparent);box-shadow:0 0 30px rgba(255,107,53,0.4),0 0 60px rgba(255,107,53,0.15);"></div>
+      <!-- green accent beam -->
+      <div style="position:absolute;top:0;right:28%;width:1px;height:45%;background:linear-gradient(180deg,rgba(0,229,160,0.5),transparent);box-shadow:0 0 20px rgba(0,229,160,0.3);"></div>
+      <!-- particles -->
+      <div style="position:absolute;top:22%;right:30%;width:4px;height:4px;background:#FF6B35;border-radius:50%;box-shadow:0 0 8px #FF6B35;opacity:0.7;"></div>
+      <div style="position:absolute;top:50%;right:22%;width:3px;height:3px;background:#00E5A0;border-radius:50%;box-shadow:0 0 6px #00E5A0;opacity:0.6;"></div>
+      <div style="position:absolute;top:30%;right:48%;width:2px;height:2px;background:#3B82F6;border-radius:50%;box-shadow:0 0 6px #3B82F6;opacity:0.8;"></div>
+      <!-- content -->
+      <div style="position:relative;z-index:10;padding:28px 24px;max-width:280px;margin-right:auto;">
+        <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,107,53,0.1);border:1px solid rgba(255,107,53,0.3);border-radius:20px;padding:5px 12px;margin-bottom:16px;">
+          <div style="width:5px;height:5px;background:#FF6B35;border-radius:50%;box-shadow:0 0 6px #FF6B35;"></div>
+          <span style="color:#FF6B35;font-size:11px;font-weight:700;">ابدأ رحلتك اليوم</span>
+        </div>
+        <h1 style="font-size:28px;font-weight:900;color:white;line-height:1.2;margin-bottom:10px;">رحلتك للصحة<br><span style="background:linear-gradient(135deg,#FF6B35,#00E5A0);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">تبدأ هنا</span></h1>
+        <p style="color:#94a3b8;font-size:11px;line-height:1.6;margin-bottom:16px;">مدرّب ذكي يرافقك كل خطوة — تمارين وتغذية</p>
+        <div style="background:linear-gradient(135deg,#FF6B35,#FF8C42);color:white;padding:10px 20px;border-radius:10px;font-size:12px;font-weight:900;display:inline-block;box-shadow:0 0 25px rgba(255,107,53,0.4);">ابدأ مجاناً ←</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — ركض في الطبيعة 🏃</h3>
+      <p>شخص يركض في الطبيعة — إحساس بالحرية والصحة العامة. ألوان أكثر دفئاً (برتقالي شروق الشمس). يناسب الـ endurance وعموم اللياقة.</p>
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:16px;padding:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;">
+  <p style="color:#64748b;font-size:11px;margin:0;text-align:center;">💡 يمكن أيضاً نعمل parallax بين صورتين — تغذية وتمارين تتبادلان بينما تتمرر الصفحة</p>
+</div>

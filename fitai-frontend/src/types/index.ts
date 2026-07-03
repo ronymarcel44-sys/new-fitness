@@ -22,6 +22,14 @@ export interface UserProfile {
   hips?: string;
   arms?: string;
   legs?: string;
+  targetWeight?: string;   // الوزن المستهدف — فارغ = هدف تلقائي
+  // قيم البداية المجمّدة (للتقدّم منذ البداية) — يديرها الباك-إند
+  startWeight?: string;
+  startChest?: string;
+  startWaist?: string;
+  startHips?: string;
+  startArms?: string;
+  startLegs?: string;
   hasCompletedSetup: boolean;
   plan?: "free" | "premium";
 }
@@ -120,6 +128,7 @@ export interface Meal {
   fat: number;
   items: string[];
   emoji: string;
+  dayOfWeek?: string;
   source?: "plan" | "ai_analyzer" | "manual";
   coachEdited?: boolean;
 }

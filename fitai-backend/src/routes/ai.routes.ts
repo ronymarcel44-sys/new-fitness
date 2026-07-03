@@ -14,17 +14,19 @@ import { buildUserContext }  from "../lib/userContext";
 const router = Router();
 router.use(authenticate);
 
-// Used during onboarding (when User.hasSetup === false). Same content as before
-// the prompt split — strict 8-step question script ending with full plan JSON.
-const ONBOARDING_PROMPT = `أنت مساعد لياقة بدنية ذكي باللغة العربية اسمك FitAI.
+// The plan-building instructions: calculation tables + JSON schema only. Sent
+// ONLY on the plan-build turn (planMode). Trimmed of all interview/conversation
+// content (goal sub-flow, measurements wording, one-question rules) — those live
+// in INTERVIEW_PROMPT — so the build request stays small enough to fit a complete
+// plan within Groq's per-request token ceiling. The user's answers come from the
+// chat history, not from this prompt.
+const PLAN_BUILDER_PROMPT = `أنت مساعد لياقة بدنية ذكي باللغة العربية اسمك FitAI. جمعت بيانات المستخدم من المحادثة، وعليك الآن إنشاء خطته.
 
-### قواعد صارمة — لا تخالفها أبداً:
-1. اسأل سؤالاً واحداً فقط في كل رسالة — لا تجمع سؤالين معاً أبداً. مثال ممنوع: "ما وزنك وطولك؟". الصحيح: اسأل عن الوزن، انتظر الإجابة، ثم اسأل عن الطول في رسالة منفصلة.
-2. اكتب بالعربية فقط. ممنوع منعاً باتاً استخدام أي حروف صينية أو يابانية أو أي لغة أخرى داخل نص الرسالة. الاستثناء الوحيد داخل الـ JSON: حقل "nameEn" (اسم التمرين بالإنجليزية) وقيمة "goal" بالمفتاح الإنجليزي.
-3. لا تنتقل للسؤال التالي إلا بعد الحصول على إجابة واضحة
-4. ممنوع إرسال JSON إذا كان أي حقل أساسي فارغاً أو صفراً
-5. كل قيمة في JSON يجب أن تكون حقيقية ومحسوبة بناءً على بيانات المستخدم الفعلية
-6. عدد التمارين يجب أن يتناسب مع المستوى (مبتدئ: 3-4 لكل يوم، متوسط: 4-5، متقدم: 5-6)
+### قواعد صارمة:
+1. اكتب بالعربية فقط داخل النصوص. الاستثناء الوحيد: حقل "nameEn" (اسم التمرين بالإنجليزية) وقيمة "goal" (المفتاح الإنجليزي).
+2. ممنوع إرسال JSON إذا كان أي حقل أساسي فارغاً أو صفراً.
+3. كل قيمة في JSON يجب أن تكون حقيقية ومحسوبة بناءً على بيانات المستخدم الفعلية.
+4. عدد التمارين يجب أن يتناسب مع المستوى (مبتدئ: 3-4 لكل يوم، متوسط: 4-5، متقدم: 5-6).
 
 ### معايير احترافية للتمرين والتغذية حسب الهدف:
 
@@ -60,8 +62,89 @@ const ONBOARDING_PROMPT = `أنت مساعد لياقة بدنية ذكي بال
 متوسط: الصدر بالبار 40-60%، الظهر 50-70%، سكوات 60-80%، دمبل كتف 10-15كغ، دمبل بايسبس 12-16كغ
 متقدم: الصدر بالبار 70-100%، الظهر 80-120%، سكوات 100-150%، دمبل كتف 18-25كغ، دمبل بايسبس 18-25كغ
 
-- تمارين وزن الجسم: اكتب "وزن الجسم"
-- كارديو وإطالة: اتركها فارغة ""
+**كل سيت مختلف (مثل مدرب محترف) — مهم جداً:**
+- تمارين الأوزان: وزن تصاعدي مختلف لكل سيت (من الأخف للأثقل) مع تكرارات تنازلية كلما زاد الوزن. افصل القيم بـ "/" وليكن عددها مساوياً لعدد السيتات بالضبط.
+  مثال (4 سيتات): "sets":"4"، "weight":"20/25/30/30 كغ"، "reps":"12/10/8/8"
+- تمارين وزن الجسم: "weight":"وزن الجسم"، والتكرارات تتغير لكل سيت (تنازلية بسبب التعب) مفصولة بـ "/" بعدد السيتات. مثال (3 سيتات): "reps":"15/12/10". وللتمارين الزمنية مثل البلانك استخدم الثواني تنازلياً: "reps":"45/40/35 ثانية".
+- كارديو وإطالة: "weight":"" والتكرارات قيمة واحدة (مدة) مثل "20 دقيقة" — بدون "/".
+
+### مفتاح الهدف:
+المستخدم اختار هدفه أثناء المحادثة. خزّن المفتاح الإنجليزي المقابل في حقل \`goal\` (واحد بالضبط من): \`fat_loss\` | \`muscle_gain\` | \`body_recomposition\` | \`toning\` | \`strength\` | \`general_fitness\` | \`endurance\`
+
+### القياسات في الـ JSON:
+- إذا أعطى المستخدم قياساته في المحادثة: ضع كل قيمة في حقلها (chest, waist, hips, arms, legs) — أرقام فقط بدون وحدة.
+- إذا تخطّاها: اترك حقول القياسات "".
+
+### إنشاء الخطة الآن:
+بياناتك عن المستخدم في المحادثة (الاسم، العمر، الوزن، الطول، الهدف، المستوى، الأمراض، القياسات). إذا نقص شيء أساسي اطلبه بسؤال واحد قبل المتابعة. وإلا قل: "شكراً! سأبدأ الآن بإنشاء خطتك..." ثم أرسل JSON بهذا الشكل بين \`\`\`json و \`\`\`:
+
+\`\`\`json
+{
+  "profile": { "name": "...", "age": "...", "weight": "...", "height": "...", "goal": "fat_loss", "level": "...", "diseases": "...", "chest": "", "waist": "", "hips": "", "arms": "", "legs": "" },
+  "weeklyPlan": {
+    "الأحد": { "type": "تمرين", "focus": "صدر", "exercises": [
+      { "id": "d1e1", "name": "بنش برس", "nameEn": "Bench Press", "sets": "4", "reps": "12/10/8/8", "rest": "90 ثانية", "weight": "20/25/30/30 كغ", "notes": "...", "muscleGroup": "صدر", "done": false },
+      { "id": "d1e2", "name": "تفتيح دمبل", "nameEn": "Dumbbell Fly", "sets": "3", "reps": "12/10/10", "rest": "60 ثانية", "weight": "دمبل 8/10/12 كغ", "notes": "...", "muscleGroup": "صدر", "done": false }
+    ]},
+    "الاثنين": { "type": "تمرين", "focus": "ظهر", "exercises": [
+      { "id": "d2e1", "name": "سحب أرضي", "nameEn": "Seated Cable Row", "sets": "4", "reps": "12/10/8/8", "rest": "90 ثانية", "weight": "30/35/40/40 كغ", "notes": "...", "muscleGroup": "ظهر", "done": false },
+      { "id": "d2e2", "name": "سحب علوي", "nameEn": "Lat Pulldown", "sets": "3", "reps": "12/10/10", "rest": "60 ثانية", "weight": "35/40/45 كغ", "notes": "...", "muscleGroup": "ظهر", "done": false }
+    ]},
+    "الثلاثاء": { "type": "راحة", "focus": "أرجل", "exercises": [
+      { "id": "d3e1", "name": "سكوات", "nameEn": "Barbell Squat", "sets": "4", "reps": "12/10/8/8", "rest": "120 ثانية", "weight": "40/50/60/60 كغ", "notes": "...", "muscleGroup": "أرجل", "done": false },
+      { "id": "d3e2", "name": "دفع الأرجل", "nameEn": "Leg Press", "sets": "3", "reps": "12/10/10", "rest": "90 ثانية", "weight": "80/90/100 كغ", "notes": "...", "muscleGroup": "أرجل", "done": false }
+    ]},
+    "الأربعاء": { "type": "تمرين", "focus": "كتف", "exercises": [
+      { "id": "d4e1", "name": "ضغط كتف", "nameEn": "Shoulder Press", "sets": "4", "reps": "12/10/8/8", "rest": "90 ثانية", "weight": "20/25/30/30 كغ", "notes": "...", "muscleGroup": "كتف", "done": false },
+      { "id": "d4e2", "name": "رفرفة جانبية", "nameEn": "Lateral Raise", "sets": "3", "reps": "15/12/12", "rest": "60 ثانية", "weight": "دمبل 6/8/8 كغ", "notes": "...", "muscleGroup": "كتف", "done": false }
+    ]},
+    "الخميس": { "type": "تمرين", "focus": "ذراعين", "exercises": [
+      { "id": "d5e1", "name": "مرجحة بايسبس", "nameEn": "Bicep Curl", "sets": "3", "reps": "12/10/10", "rest": "60 ثانية", "weight": "دمبل 10/12/14 كغ", "notes": "...", "muscleGroup": "ذراعين", "done": false },
+      { "id": "d5e2", "name": "ترايسبس بالحبل", "nameEn": "Triceps Pushdown", "sets": "3", "reps": "12/10/10", "rest": "60 ثانية", "weight": "20/25/30 كغ", "notes": "...", "muscleGroup": "ذراعين", "done": false }
+    ]},
+    "الجمعة": { "type": "راحة", "focus": "بطن وكارديو", "exercises": [
+      { "id": "d6e1", "name": "بلانك", "nameEn": "Plank", "sets": "3", "reps": "45/40/35 ثانية", "rest": "45 ثانية", "weight": "وزن الجسم", "notes": "...", "muscleGroup": "بطن", "done": false },
+      { "id": "d6e2", "name": "كارديو", "nameEn": "Treadmill Running", "sets": "1", "reps": "20 دقيقة", "rest": "-", "weight": "", "notes": "...", "muscleGroup": "كارديو", "done": false }
+    ]},
+    "السبت": { "type": "تمرين", "focus": "جسم كامل", "exercises": [
+      { "id": "d7e1", "name": "رفعة ميتة", "nameEn": "Deadlift", "sets": "4", "reps": "8/6/5/5", "rest": "120 ثانية", "weight": "50/60/70/70 كغ", "notes": "...", "muscleGroup": "ظهر وأرجل", "done": false },
+      { "id": "d7e2", "name": "ضغط بوش أب", "nameEn": "Push Up", "sets": "3", "reps": "15/12/10", "rest": "60 ثانية", "weight": "وزن الجسم", "notes": "...", "muscleGroup": "صدر", "done": false }
+    ]}
+  },
+  "nutrition": { "totalCalories": 2200, "protein": 165, "carbs": 220, "fat": 73 }
+}
+\`\`\`
+
+### مهم:
+- IDs فريدة لكل تمرين (d1e1, d1e2...)
+- nameEn إنجليزي صحيح لكل تمرين
+- 5 أيام تمرين + يومان راحة. يوم الجمعة دائماً راحة، واختر يوماً آخر للراحة غير ملاصق للجمعة (لا يكون اليومان متتاليين). أيام التمرين الخمسة يجب أن تغطي كل المجموعات العضلية الرئيسية بشكل متوازن.
+- ⚠️ مهم جداً: كل الأيام السبعة (بما فيها يوما الراحة) يجب أن تحتوي على تمرين كامل حقيقي (2-3 تمارين) داخل مصفوفة "exercises" — ممنوع ترك أي يوم فارغاً ([]). الفرق الوحيد ليومَي الراحة هو "type": "راحة" مع احتفاظهما بتمارين كاملة (لأن المستخدم قد يحوّلهما لتمرين). باقي الأيام الخمسة "type": "تمرين".
+- القياسات اتركها "" إذا لم يعطها المستخدم
+- الأرقام في المثال أعلاه للتوضيح فقط — احسب القيم الحقيقية بناءً على بيانات المستخدم (وزنه، هدفه، مستواه)
+- ⚠️ كل تمارين الأوزان: حقلا "weight" و"reps" قيم مفصولة بـ "/" بعدد السيتات (الوزن تصاعدي، التكرار تنازلي). تمارين وزن الجسم: "reps" مفصولة بـ "/" أيضاً. الكارديو/الإطالة فقط: قيمة واحدة بدون "/".
+- الخطة الغذائية يجب أن تحتوي دائماً على 3-4 وجبات تغطي اليوم كاملاً (إفطار، غداء، وجبة خفيفة، عشاء)
+- التغذية: احسب أهداف اليوم فقط (totalCalories, protein, carbs, fat) — الوجبات تُنشأ في خطوة منفصلة، لا تضع مصفوفة meals
+
+### تعديل الخطة:
+إذا أرسل المستخدم "[تحديث القياسات]": أعد بناء الخطة وأرسل JSON جديد إذا كان التغيير كبيراً.`;
+
+// Sent on every onboarding turn WHILE the AI is still asking its 8 questions.
+// Deliberately small — no tables, no JSON schema — so each question turn stays
+// well under Groq's per-minute token limit. The heavy PLAN_BUILDER_PROMPT above
+// is sent instead on the plan-generation turn (see the wiring in POST /chat).
+const INTERVIEW_PROMPT = `أنت مساعد لياقة بدنية ذكي باللغة العربية اسمك FitAI. مهمتك الآن: جمع معلومات المستخدم عبر طرح الأسئلة، سؤالاً واحداً في كل رسالة.
+
+### قواعد صارمة — لا تخالفها أبداً:
+1. اسأل سؤالاً واحداً فقط في كل رسالة — لا تجمع سؤالين معاً أبداً. مثال ممنوع: "ما وزنك وطولك؟". الصحيح: اسأل عن الوزن، انتظر الإجابة، ثم اسأل عن الطول في رسالة منفصلة.
+2. اكتب بالعربية فقط. ممنوع منعاً باتاً استخدام أي حروف صينية أو يابانية أو أي لغة أخرى داخل نص الرسالة.
+3. لا تنتقل للسؤال التالي إلا بعد الحصول على إجابة واضحة.
+4. ممنوع إرسال أي خطة أو JSON قبل أن تجمع كل المعلومات الثمانية وتسأل عن قياسات الجسم مرة واحدة على الأقل.
+
+### الترتيب الإلزامي لجمع المعلومات:
+1. الاسم  2. العمر  3. الوزن  4. الطول  5. الهدف  6. المستوى  7. الأمراض  8. قياسات الجسم
+
+اسأل عن كل خطوة بالترتيب، بما فيها قياسات الجسم (الخطوة 8).
 
 ### كيفية تحديد الهدف (السؤال رقم 5):
 لا تعرض القائمة مباشرة. اتبع هذه الخطوات بالترتيب:
@@ -89,55 +172,19 @@ const ONBOARDING_PROMPT = `أنت مساعد لياقة بدنية ذكي بال
 6. **لياقة عامة** — الشعور بصحة أفضل وطاقة أعلى بدون هدف محدد
 7. **تحمل ولياقة قلبية** — الجري لمسافات أطول وتحمل أعلى للقلب"
 
-**عند التأكيد:**
-بعد أن يوافق المستخدم على هدف، خزّن المفتاح الإنجليزي في حقل \`goal\` في JSON النهائي. القيم المسموحة (يجب أن تكون واحدة من هذه بالضبط):
-\`fat_loss\` | \`muscle_gain\` | \`body_recomposition\` | \`toning\` | \`strength\` | \`general_fitness\` | \`endurance\`
+### كيفية السؤال عن قياسات الجسم (السؤال رقم 8 — الأخير قبل الخطة):
+بعد سؤال الأمراض مباشرة، اسأل عن كل القياسات في رسالة واحدة فقط (هذا هو الاستثناء الوحيد من قاعدة "سؤال واحد"، لأن القياسات موضوع واحد). اكتب الرسالة بهذا الشكل بالضبط:
 
-### الترتيب الإلزامي لجمع المعلومات:
-1. الاسم  2. العمر  3. الوزن  4. الطول  5. الهدف  6. المستوى  7. الأمراض  8. القياسات (اختياري)
+"أخيراً، لو تعرف قياسات جسمك راح أسجّلها كنقطة بداية لتتبّع تقدّمك:
+• محيط الصدر
+• الخصر
+• الأرداف
+• الذراع
+• الساق
+(بالسنتيمتر) — أرسلها كلها، أو اكتب «تخطّي» إذا ما تعرفها."
 
 ### بعد جمع كل المعلومات:
-قل: "شكراً! سأبدأ الآن بإنشاء خطتك..."
-ثم أرسل JSON بهذا الشكل بين \`\`\`json و \`\`\`:
-
-\`\`\`json
-{
-  "profile": { "name": "...", "age": "...", "weight": "...", "height": "...", "goal": "fat_loss", "level": "...", "diseases": "...", "chest": "", "waist": "", "hips": "", "arms": "", "legs": "" },
-  "weeklyPlan": {
-    "الأحد": { "type": "تمرين", "focus": "صدر", "exercises": [
-      { "id": "d1e1", "name": "بنش برس", "nameEn": "Bench Press", "sets": "3", "reps": "12", "rest": "60 ثانية", "weight": "15/20/20 كغ", "notes": "...", "muscleGroup": "صدر", "done": false }
-    ]},
-    "الاثنين":  { "type": "تمرين", "focus": "ظهر", "exercises": [] },
-    "الثلاثاء": { "type": "تمرين", "focus": "أرجل", "exercises": [] },
-    "الأربعاء": { "type": "تمرين", "focus": "كتف", "exercises": [] },
-    "الخميس":   { "type": "تمرين", "focus": "ذراعين", "exercises": [] },
-    "الجمعة":   { "type": "تمرين", "focus": "بطن وكارديو", "exercises": [] },
-    "السبت":    { "type": "تمرين", "focus": "جسم كامل", "exercises": [] }
-  },
-  "nutrition": {
-    "totalCalories": 2200, "protein": 165, "carbs": 220, "fat": 73,
-    "meals": [
-      { "id": "m1", "name": "الإفطار",    "time": "7:00 ص", "calories": 550, "protein": 35, "carbs": 60, "fat": 18, "items": ["..."], "emoji": "☀️" },
-      { "id": "m2", "name": "الغداء",      "time": "1:00 م", "calories": 750, "protein": 55, "carbs": 80, "fat": 25, "items": ["..."], "emoji": "🍽️" },
-      { "id": "m3", "name": "وجبة خفيفة", "time": "4:00 م", "calories": 300, "protein": 20, "carbs": 35, "fat": 8,  "items": ["..."], "emoji": "🍌" },
-      { "id": "m4", "name": "العشاء",      "time": "8:00 م", "calories": 600, "protein": 55, "carbs": 45, "fat": 22, "items": ["..."], "emoji": "🌙" }
-    ]
-  }
-}
-\`\`\`
-
-### مهم:
-- IDs فريدة لكل تمرين (d1e1, d1e2...)
-- nameEn إنجليزي صحيح لكل تمرين
-- اجعل جميع أيام الأسبوع السبعة أيام تمرين (type = "تمرين") مع تمارين فعلية في كل يوم — لا تضع أي يوم راحة. وزّع المجموعات العضلية على الأيام السبعة.
-- القياسات اتركها "" إذا لم يعطها المستخدم
-- الأرقام في المثال أعلاه للتوضيح فقط — احسب القيم الحقيقية بناءً على بيانات المستخدم (وزنه، هدفه، مستواه)
-- الخطة الغذائية يجب أن تحتوي دائماً على 3-4 وجبات تغطي اليوم كاملاً (إفطار، غداء، وجبة خفيفة، عشاء)
-- مجموع سعرات الوجبات يجب أن يساوي totalCalories تقريباً
-- محتوى كل وجبة (items) يجب أن يكون مناسباً لهدف المستخدم وملائماً ثقافياً
-
-### تعديل الخطة:
-إذا أرسل المستخدم "[تحديث القياسات]": أعد بناء الخطة وأرسل JSON جديد إذا كان التغيير كبيراً.`;
+عندما تجمع المعلومات الثمانية كلها (بما فيها القياسات أو تخطّيها)، اشكر المستخدم وأخبره أنك ستبدأ بإنشاء خطته الآن.`;
 
 // Used post-onboarding (User.hasSetup === true). The user's profile + 7-day
 // activity block (built by buildUserContext) gets appended to this prompt.
@@ -163,24 +210,43 @@ const COACH_PROMPT = `أنت FitAI، المدرب الشخصي للمستخدم 
 {
   "profile": { "name": "...", "age": "...", "weight": "...", "height": "...", "goal": "fat_loss", "level": "...", "diseases": "...", "chest": "", "waist": "", "hips": "", "arms": "", "legs": "" },
   "weeklyPlan": { "الأحد": { "type": "تمرين|راحة", "focus": "...", "exercises": [{ "id": "...", "name": "...", "nameEn": "...", "sets": "...", "reps": "...", "rest": "...", "weight": "...", "notes": "...", "muscleGroup": "...", "done": false }] }, "...بقية الأيام": "..." },
-  "nutrition": { "totalCalories": 2200, "protein": 165, "carbs": 220, "fat": 73, "meals": [{ "id": "...", "name": "...", "time": "...", "calories": 0, "protein": 0, "carbs": 0, "fat": 0, "items": ["..."], "emoji": "..." }] }
+  "nutrition": { "totalCalories": 2200, "protein": 165, "carbs": 220, "fat": 73 }
 }
-ملاحظات للـ JSON: IDs فريدة، nameEn إنجليزي صحيح، أيام الراحة exercises=[]، قيم محسوبة فعلياً على بيانات المستخدم.`;
+ملاحظات للـ JSON: IDs فريدة، nameEn إنجليزي صحيح، قيم محسوبة فعلياً على بيانات المستخدم.
+كل سيت مختلف (مثل مدرب محترف): لتمارين الأوزان ضع "weight" و"reps" كقيم مفصولة بـ "/" بعدد السيتات (الوزن تصاعدي من الأخف للأثقل، التكرار تنازلي)، مثال 4 سيتات: "weight":"20/25/30/30 كغ" و"reps":"12/10/8/8". لتمارين وزن الجسم: "weight":"وزن الجسم" و"reps" مفصولة بـ "/" تنازلياً مثل "15/12/10". الكارديو/الإطالة: "weight":"" و"reps" قيمة واحدة (مدة) مثل "20 دقيقة".
+الأيام: 5 أيام تمرين + يومان راحة (الجمعة دائماً + يوم آخر غير ملاصق لها)، وكل الأيام السبعة — حتى يومَي الراحة — تحتوي تمريناً كاملاً (2-3 تمارين)، والفرق ليومَي الراحة فقط "type":"راحة".
+التغذية: احسب أهداف اليوم فقط (totalCalories, protein, carbs, fat) بدون مصفوفة meals — الوجبات تُنشأ في خطوة منفصلة.`;
 
-// Plan generation needs full tokens — detected by message count. Kept low so a
-// conversation that combined questions still flips to plan mode before the JSON.
-const ONBOARDING_COMPLETE_THRESHOLD = 11;
+// Once a post-setup coach chat grows past this many messages, trim the history
+// we resend (keep the first message + the last 10) to save tokens.
+const HISTORY_TRIM_THRESHOLD = 11;
 
 interface ChatMsg {
   role: string;
   text: string;
 }
 
-// Detect if we're at the point where the AI should output the plan JSON
-function needsFullTokens(messages: ChatMsg[]): boolean {
-  if (messages.length >= ONBOARDING_COMPLETE_THRESHOLD) return true;
+// The body-measurements question (step 8) is the LAST question before the plan.
+// It lists "الخصر" and "الأرداف" together — a pair that appears nowhere else in
+// the interview — so its presence in an AI message reliably marks the end of the
+// questions, i.e. the next turn is the plan build.
+function measurementsQuestionAsked(messages: ChatMsg[]): boolean {
+  return messages.some(
+    (m) => m.role === "ai" && m.text.includes("الخصر") && m.text.includes("الأرداف")
+  );
+}
+
+// True ONLY on the turn that should actually BUILD the plan, so the heavy prompt
+// + large output budget land there and nowhere else:
+//   • during onboarding: once the measurements question has been asked (the next
+//     turn outputs the plan JSON)
+//   • anytime: an explicit [تحديث القياسات] measurements-update request
+// Deliberately NOT message-count based — counting flipped the heavy prompt during
+// the last couple of questions and blew Groq's per-minute token limit.
+function needsFullTokens(messages: ChatMsg[], isOnboarding: boolean): boolean {
   const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
   if (lastUserMsg?.text.includes("[تحديث القياسات]")) return true;
+  if (isOnboarding && measurementsQuestionAsked(messages)) return true;
   return false;
 }
 
@@ -209,21 +275,22 @@ router.post("/chat", async (req: Request, res: Response): Promise<void> => {
   });
   const isOnboarding = !userRow?.hasSetup;
 
-  // Only the FINAL plan message needs a large output budget. Reserving 4000 on
-  // every message blew past Groq's 6,000 TPM free-tier limit (max_tokens counts
-  // toward TPM), causing 429s. So questions get a small budget and only the
-  // plan-generation turn gets the big one. The threshold was also lowered so a
-  // shorter (combined-question) conversation still trips plan mode in time.
-  const planMode  = needsFullTokens(messages);
-  const maxTokens = planMode ? 2000 : 700;
+  // The plan-build turn needs a big output budget (the full 7-day plan + meals
+  // truncated at 2000). But Groq's free tier has a per-request ceiling (~8k):
+  // prompt_tokens + max_tokens must fit. The slimmed PLAN_BUILDER_PROMPT keeps the
+  // build input small enough that 3000 output fits under that ceiling. Question
+  // turns stay tiny.
+  const planMode  = needsFullTokens(messages, isOnboarding);
+  const maxTokens = planMode ? 3000 : 700;
 
   // Structured onboarding output is more reliable (valid JSON, Arabic-only, one
   // question at a time) at a lower temperature; keep the coach chat livelier.
   const temperature = isOnboarding ? 0.4 : 0.7;
 
-  // Trim chat history for post-setup chat to save tokens
+  // Trim history only for long POST-SETUP coach chats (keep first + last 10).
+  // Onboarding always sends full history so the AI never forgets earlier answers.
   const historyToSend =
-    planMode || messages.length < ONBOARDING_COMPLETE_THRESHOLD
+    isOnboarding || planMode || messages.length < HISTORY_TRIM_THRESHOLD
       ? messages
       : [messages[0], ...messages.slice(-10)];
 
@@ -232,7 +299,10 @@ router.post("/chat", async (req: Request, res: Response): Promise<void> => {
   // onboarding script is left exactly as it was.
   let systemContent: string;
   if (isOnboarding) {
-    systemContent = ONBOARDING_PROMPT;
+    // Question turns get only the small interview prompt. The plan-build turn
+    // (planMode) gets the slim builder prompt (tables + JSON schema); the user's
+    // answers come from the chat history that's sent alongside it.
+    systemContent = planMode ? PLAN_BUILDER_PROMPT : INTERVIEW_PROMPT;
   } else {
     const contextBlock = await buildUserContext(userId);
     systemContent = contextBlock
@@ -263,17 +333,37 @@ router.post("/chat", async (req: Request, res: Response): Promise<void> => {
     });
 
     if (!response.ok) {
-      const err = await response.json().catch(() => ({} as any));
-      res.status(response.status).json({ error: err?.error?.message ?? "Groq request failed" });
+      const err: any = await response.json().catch(() => ({} as any));
+      const h = response.headers;
+      // Log the FULL Groq error + rate-limit headers so we can see EXACTLY which
+      // limit was hit (per-minute vs per-day, tokens vs requests) and when it
+      // resets. The error message itself usually spells out "Limit/Used/Requested".
+      console.error(
+        `❌ Groq ${response.status} [planMode=${planMode}]: ${err?.error?.message ?? "(no message body)"}\n` +
+        `   tokens : limit=${h.get("x-ratelimit-limit-tokens")} remaining=${h.get("x-ratelimit-remaining-tokens")} reset=${h.get("x-ratelimit-reset-tokens")}\n` +
+        `   requests: limit=${h.get("x-ratelimit-limit-requests")} remaining=${h.get("x-ratelimit-remaining-requests")} reset=${h.get("x-ratelimit-reset-requests")}\n` +
+        `   retry-after=${h.get("retry-after")}`
+      );
+      const payload: { error: string; retryAfter?: number } = {
+        error: err?.error?.message ?? "Groq request failed",
+      };
+      // On a rate-limit (429), tell the client how long to wait. Groq sends a
+      // `Retry-After` header (seconds); fall back to 8s when it's missing.
+      if (response.status === 429) {
+        const ra = Number(h.get("retry-after"));
+        payload.retryAfter = Number.isFinite(ra) && ra > 0 ? ra : 8;
+      }
+      res.status(response.status).json(payload);
       return;
     }
 
     const data = await response.json() as any;
     const reply = data.choices?.[0]?.message?.content ?? "لم أتمكن من الرد.";
 
-    // Log token usage for monitoring
+    // Log token usage for monitoring (planMode + the budget we asked for, so we
+    // can correlate big turns with rate-limit hits and per-minute accumulation)
     if (data.usage) {
-      console.log(`🤖 Groq: ${data.usage.prompt_tokens} in + ${data.usage.completion_tokens} out = ${data.usage.total_tokens} total`);
+      console.log(`🤖 Groq [planMode=${planMode}, max=${maxTokens}]: ${data.usage.prompt_tokens} in + ${data.usage.completion_tokens} out = ${data.usage.total_tokens} total`);
     }
 
     res.json({ reply });
@@ -330,7 +420,7 @@ router.post("/analyze-meal", async (req: Request, res: Response): Promise<void> 
     });
 
     if (!response.ok) {
-      const err = await response.json().catch(() => ({} as any));
+      const err: any = await response.json().catch(() => ({} as any));
       res.status(response.status).json({ error: err?.error?.message ?? "Groq request failed" });
       return;
     }
@@ -395,7 +485,7 @@ router.post("/analyze-full-meal", async (req: Request, res: Response): Promise<v
     });
 
     if (!response.ok) {
-      const err = await response.json().catch(() => ({} as any));
+      const err: any = await response.json().catch(() => ({} as any));
       res.status(response.status).json({ error: err?.error?.message ?? "Groq request failed" });
       return;
     }
@@ -469,7 +559,7 @@ Required JSON format (fill with real Arabic content):
     });
 
     if (!response.ok) {
-      const err = await response.json().catch(() => ({} as any));
+      const err: any = await response.json().catch(() => ({} as any));
       res.status(response.status).json({ error: err?.error?.message ?? "Groq request failed" });
       return;
     }
@@ -503,6 +593,170 @@ Required JSON format (fill with real Arabic content):
   } catch (err) {
     console.error("AI exercise-info error:", err);
     res.status(500).json({ error: "Failed to fetch exercise info" });
+  }
+});
+
+// ── POST /ai/generate-meal-plan ────────────────────────────────────────────────
+// Builds a 7-day meal plan. The AI picks foods + a rough calorie estimate per
+// meal; macros are computed HERE by scaling to the daily targets so every day
+// sums exactly. Saves a new active DietPlan with 28 DietMeal rows (4/day).
+const MEAL_DAYS   = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+const SLOT_TYPES  = ["breakfast", "lunch", "snack", "dinner"];
+const SLOT_SHARES = [0.25, 0.35, 0.15, 0.25];
+
+const GOAL_AR_MEAL: Record<string, string> = {
+  fat_loss: "خسارة دهون", muscle_gain: "بناء عضلات", body_recomposition: "إعادة تشكيل الجسم",
+  toning: "نحت وتقوية", strength: "زيادة القوة", general_fitness: "لياقة عامة", endurance: "تحمل ولياقة قلبية",
+};
+const LEVEL_AR_MEAL: Record<string, string> = { beginner: "مبتدئ", intermediate: "متوسط", advanced: "متقدم" };
+
+router.post("/generate-meal-plan", async (req: Request, res: Response): Promise<void> => {
+  const totalCalories = Number(req.body?.totalCalories) || 0;
+  const proteinT      = Number(req.body?.protein)       || 0;
+  const carbsT        = Number(req.body?.carbs)         || 0;
+  const fatT          = Number(req.body?.fat)           || 0;
+  if (totalCalories <= 0) {
+    res.status(400).json({ error: "totalCalories required" });
+    return;
+  }
+
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) { res.status(500).json({ error: "GROQ_API_KEY not configured on server" }); return; }
+
+  const userId = req.user!.userId;
+  const user = await prisma.user.findUnique({
+    where:  { id: userId },
+    select: { goal: true, fitnessLevel: true, diseases: true },
+  });
+
+  const goalAr  = (user?.goal && GOAL_AR_MEAL[user.goal])                  || "لياقة عامة";
+  const levelAr = (user?.fitnessLevel && LEVEL_AR_MEAL[user.fitnessLevel]) || "مبتدئ";
+  const avoid   = user?.diseases?.trim() || "لا يوجد";
+
+  const prompt = `أنت خبير تغذية. أنشئ خطة وجبات 7 أيام (الأحد إلى السبت) لمطبخ عربي.
+
+المستخدم: الهدف=${goalAr}، المستوى=${levelAr}، أطعمة يجب تجنّبها تماماً=${avoid}.
+
+قواعد صارمة:
+- 4 وجبات لكل يوم بالترتيب: فطور، غداء، وجبة خفيفة، عشاء — كل وجبة مناسبة لوقتها (فطور = أطعمة فطور حقيقية، لا أرز/عشاء صباحاً) وملائمة ثقافياً.
+- نوّع الوجبات بين الأيام السبعة — كل يوم مختلف عن الآخر.
+- ممنوع منعاً باتاً أي طعام من قائمة "يجب تجنّبها".
+- اختر أطعمة تناسب هدف المستخدم.
+- اكتب بالعربية فقط.
+- لكل وجبة: name (اسم قصير)، time (وقت تقريبي)، items (مكوّنات)، emoji، cal (تقدير سعرات تقريبي لحجم الوجبة فقط).
+
+أرسل JSON فقط بين \`\`\`json و \`\`\` بهذا الشكل (الأيام السبعة كلها، 4 وجبات لكل يوم):
+\`\`\`json
+{"days":{"الأحد":[{"name":"فطور","time":"7:00 ص","items":["..."],"emoji":"☀️","cal":450},{"name":"غداء","time":"1:00 م","items":["..."],"emoji":"🍽️","cal":650},{"name":"وجبة خفيفة","time":"4:00 م","items":["..."],"emoji":"🍎","cal":250},{"name":"عشاء","time":"8:00 م","items":["..."],"emoji":"🌙","cal":550}],"الاثنين":[...],"الثلاثاء":[...],"الأربعاء":[...],"الخميس":[...],"الجمعة":[...],"السبت":[...]}}
+\`\`\``;
+
+  const doGroqCall = () => fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type":  "application/json",
+      "Authorization": `Bearer ${apiKey}`,
+      "User-Agent":    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    },
+    body: JSON.stringify({
+      model: "llama-3.3-70b-versatile",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.7,
+      max_tokens:  3000,
+    }),
+  });
+
+  try {
+    let response = await doGroqCall();
+
+    // This call fires right after the big main-plan call, which usually eats most
+    // of the per-minute TPM budget — so a first 429 here is expected. Wait the
+    // advised time (the minute window resets) and retry once.
+    if (response.status === 429) {
+      const ra = Number(response.headers.get("retry-after"));
+      const waitSec = Math.min(Number.isFinite(ra) && ra > 0 ? ra + 1 : 16, 30);
+      console.log(`🍽️ meal-plan: 429 — waiting ${waitSec}s for the TPM window to reset, then retrying`);
+      await new Promise((r) => setTimeout(r, waitSec * 1000));
+      response = await doGroqCall();
+    }
+
+    console.log(`🍽️ meal-plan: groq status=${response.status}`);
+    if (!response.ok) {
+      const err: any = await response.json().catch(() => ({} as any));
+      console.warn(`🍽️ meal-plan groq error ${response.status}: ${err?.error?.message ?? "(no body)"}`);
+      const payload: { error: string; retryAfter?: number } = { error: err?.error?.message ?? "Groq request failed" };
+      if (response.status === 429) {
+        const ra = Number(response.headers.get("retry-after"));
+        payload.retryAfter = Number.isFinite(ra) && ra > 0 ? ra : 8;
+      }
+      res.status(response.status).json(payload);
+      return;
+    }
+
+    const data: any = await response.json();
+    const content: string = data.choices?.[0]?.message?.content ?? "";
+    const match = content.match(/```json\s*([\s\S]*?)\s*```/) ?? content.match(/\{[\s\S]*\}/);
+    if (!match) {
+      console.warn(`🍽️ meal-plan: no JSON found. content starts: ${content.slice(0, 120)}`);
+      res.status(502).json({ error: "Failed to parse meal plan" });
+      return;
+    }
+    let parsed: any;
+    try {
+      parsed = JSON.parse(match[1] ?? match[0]);
+    } catch (e) {
+      console.warn(`🍽️ meal-plan: JSON.parse failed: ${(e as Error).message}. snippet: ${(match[1] ?? match[0]).slice(0, 120)}`);
+      res.status(502).json({ error: "Invalid meal plan JSON" });
+      return;
+    }
+    const days = parsed.days ?? {};
+    console.log(`🍽️ meal-plan: parsed days=${Object.keys(days).length}`);
+
+    // Build DietMeal rows, computing macros deterministically per day.
+    const mealRows: any[] = [];
+    for (const day of MEAL_DAYS) {
+      const meals: any[] = Array.isArray(days[day]) ? days[day].slice(0, 4) : [];
+      while (meals.length < 4) meals.push({}); // guard: always 4 slots
+      const cals = meals.map((m) => Number(m?.cal) || 0);
+      const sum  = cals.reduce((a, b) => a + b, 0);
+      meals.forEach((m, i) => {
+        const share = sum > 0 ? cals[i] / sum : SLOT_SHARES[i];
+        mealRows.push({
+          dayOfWeek: day,
+          mealName:  m?.name || ["فطور", "غداء", "وجبة خفيفة", "عشاء"][i],
+          mealTime:  m?.time || "",
+          mealType:  SLOT_TYPES[i],
+          calories:  Math.round(share * totalCalories),
+          proteinG:  Math.round(share * proteinT),
+          carbsG:    Math.round(share * carbsT),
+          fatG:      Math.round(share * fatT),
+          items:     Array.isArray(m?.items) ? m.items : [],
+          emoji:     m?.emoji || null,
+        });
+      });
+    }
+
+    await prisma.dietPlan.updateMany({
+      where: { userId, isActive: true },
+      data:  { isActive: false },
+    });
+    const newPlan = await prisma.dietPlan.create({
+      data: {
+        userId,
+        totalCalories,
+        proteinGrams: proteinT,
+        carbsGrams:   carbsT,
+        fatGrams:     fatT,
+        isActive:     true,
+        meals:        { create: mealRows },
+      },
+      include: { meals: true },
+    });
+
+    console.log(`🍽️ meal-plan: saved ${newPlan.meals.length} meals`);
+    res.status(201).json(newPlan);
+  } catch (err) {
+    console.error("🍽️ generate-meal-plan error:", err);
+    res.status(500).json({ error: "Failed to generate meal plan" });
   }
 });
 

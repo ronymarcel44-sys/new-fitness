@@ -13,11 +13,16 @@ import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { addMessage, setLoading, setSetupComplete, clearChat, saveMessageThunk, clearChatThunk } from "@/features/chat/chatSlice";
 import { setProfile, completeSetup, saveProfileThunk } from "@/features/user/userSlice";
 import { setPlan as setWorkoutPlan, resetPlan as resetWorkout, saveWorkoutThunk } from "@/features/workout/workoutSlice";
-import { setPlan as setNutritionPlan, resetPlan as resetNutrition, saveNutritionThunk } from "@/features/nutrition/nutritionSlice";
-import { addWeightEntry, setStreak, markActiveToday, addWeightEntryThunk } from "@/features/progress/progressSlice";
+import { setPlan as setNutritionPlan, resetPlan as resetNutrition, generateMealPlanThunk } from "@/features/nutrition/nutritionSlice";
+import { addWeightEntry, addWeightEntryThunk } from "@/features/progress/progressSlice";
 import { askGemini, parsePlanFromText } from "@/lib/gemini";
 
 const WELCOME_MSG = `مرحباً! أنا مساعدك الرياضي الذكي 🤖\n\nسأساعدك في بناء خطة تمارين وتغذية مخصصة تماماً لجسمك وأهدافك.\n\nللبدء، **ما اسمك؟** 😊`;
+
+// Shown transiently in the typing bubble while we wait out a rate-limit and retry
+const BUSY_MSG = "لحظة من فضلك… الخدمة مزدحمة قليلاً وسأكمل بعد ثوانٍ ⏳";
+// Shown as an AI message when the request fails (or the retry also fails)
+const FAIL_MSG = "⚠️ لم أتمكن من الرد الآن، حاول مرة أخرى بعد قليل";
 
 export function ChatPage() {
   const dispatch = useAppDispatch();
@@ -25,6 +30,7 @@ export function ChatPage() {
 
   const [input,       setInput]       = useState("");
   const [showConfirm, setShowConfirm] = useState(false);
+  const [retryNotice, setRetryNotice] = useState<string | null>(null);
   const bottomRef    = useRef<HTMLDivElement>(null);
   const initialized  = useRef(false);
   const autoSendRef  = useRef(false);
@@ -58,19 +64,38 @@ export function ChatPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Calls the AI; on a rate-limit (429) shows a transient busy notice, waits the
+  // server-advised time (capped at 10s), then retries ONCE. The busy notice is UI
+  // only — it is never added to `messages`, so it costs no tokens on later turns.
+  const callAIWithRetry = async (history: { role: string; text: string }[]): Promise<string> => {
+    try {
+      return await askGemini(history);
+    } catch (e) {
+      const err = e as { status?: number; retryAfter?: number };
+      if (err?.status === 429) {
+        const waitSec = Math.min(err.retryAfter ?? 8, 10);
+        setRetryNotice(BUSY_MSG);
+        await new Promise((resolve) => setTimeout(resolve, waitSec * 1000));
+        setRetryNotice(null);
+        return await askGemini(history); // one retry; if it throws, the caller shows FAIL_MSG
+      }
+      throw e;
+    }
+  };
+
   const sendToAI = async (text: string) => {
     dispatch(setLoading(true));
     try {
-      const reply = await askGemini(messages.map((m) => ({ role: m.role, text: m.text })));
+      const reply = await callAIWithRetry(messages.map((m) => ({ role: m.role, text: m.text })));
       dispatch(addMessage({ role: "ai", text: reply }));
       dispatch(saveMessageThunk({ role: "ai", text: reply }));
       handleParsedPlan(reply, false);
     } catch {
-      const errMsg = "⚠️ لم أتمكن من الاتصال بالـ AI.";
-      dispatch(addMessage({ role: "ai", text: errMsg }));
-      dispatch(saveMessageThunk({ role: "ai", text: errMsg }));
+      dispatch(addMessage({ role: "ai", text: FAIL_MSG }));
+      dispatch(saveMessageThunk({ role: "ai", text: FAIL_MSG }));
     } finally {
       dispatch(setLoading(false));
+      setRetryNotice(null);
       autoSendRef.current = false;
     }
   };
@@ -84,7 +109,7 @@ export function ChatPage() {
 
     dispatch(setLoading(true));
     try {
-      const reply = await askGemini([
+      const reply = await callAIWithRetry([
         ...messages.map((m) => ({ role: m.role, text: m.text })),
         { role: "user", text },
       ]);
@@ -92,11 +117,11 @@ export function ChatPage() {
       dispatch(saveMessageThunk({ role: "ai", text: reply }));
       handleParsedPlan(reply, true);
     } catch {
-      const errMsg = "⚠️ لم أتمكن من الاتصال بالـ AI. تأكد من صحة المفتاح.";
-      dispatch(addMessage({ role: "ai", text: errMsg }));
-      dispatch(saveMessageThunk({ role: "ai", text: errMsg }));
+      dispatch(addMessage({ role: "ai", text: FAIL_MSG }));
+      dispatch(saveMessageThunk({ role: "ai", text: FAIL_MSG }));
     } finally {
       dispatch(setLoading(false));
+      setRetryNotice(null);
     }
   };
 
@@ -106,7 +131,15 @@ export function ChatPage() {
     if (!parsed) return;
 
     if (parsed.profile) {
-      const profileData = { ...parsed.profile, hasCompletedSetup: true };
+      // The AI's profile template always emits body measurements as empty strings
+      // ("chest":"", ...). Without stripping them, every plan parse would overwrite
+      // the measurements the user set on the Progress page. Drop empty/blank fields
+      // so the AI can only ever ADD real values, never wipe existing ones.
+      const cleanedProfile = Object.fromEntries(
+        Object.entries(parsed.profile).filter(([, v]) => v !== "" && v != null)
+      ) as Partial<typeof parsed.profile>;
+
+      const profileData = { ...cleanedProfile, hasCompletedSetup: true };
       dispatch(setProfile(profileData));
       dispatch(completeSetup());
       dispatch(saveProfileThunk(profileData));
@@ -117,8 +150,6 @@ export function ChatPage() {
 
         dispatch(addWeightEntry({ week: label, weight }));
         dispatch(addWeightEntryThunk({ weight }));
-
-        if (isFirstSetup) dispatch(setStreak(1));
       }
     }
 
@@ -130,12 +161,21 @@ export function ChatPage() {
     }
 
     if (parsed.nutrition) {
-      dispatch(setNutritionPlan(parsed.nutrition));
-      dispatch(saveNutritionThunk(parsed.nutrition));
+      // Show targets instantly (no meals yet), then generate the 7-day meal plan.
+      dispatch(setNutritionPlan({ ...parsed.nutrition, meals: [] }));
+      dispatch(generateMealPlanThunk({
+        totalCalories: parsed.nutrition.totalCalories,
+        protein:       parsed.nutrition.protein,
+        carbs:         parsed.nutrition.carbs,
+        fat:           parsed.nutrition.fat,
+      }));
     }
 
     dispatch(setSetupComplete());
-    dispatch(markActiveToday());
+    // NOTE: generating/updating the plan is NOT a "commitment day" — the streak
+    // only counts real activity (completing a workout or logging a meal), so we
+    // deliberately do NOT mark active here. Otherwise a measurements update
+    // (which resends [تحديث القياسات] and re-parses the plan) would bump it.
   };
 
   // Clear chat both locally and on the server
@@ -234,7 +274,7 @@ export function ChatPage() {
               🤖
             </div>
             <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-bg px-5 py-3 text-sm text-slate-500">
-              <Loader2 className="h-4 w-4 animate-spin" /> جاري الكتابة...
+              <Loader2 className="h-4 w-4 animate-spin" /> {retryNotice ?? "جاري الكتابة..."}
             </div>
           </div>
         )}

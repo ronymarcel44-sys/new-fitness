@@ -28,3 +28,11 @@
   .glow-lg { box-shadow: 0 0 60px rgba(0,229,160,0.35); }
   .input-base { @apply w-full rounded-xl border border-white/10 bg-bg px-5 py-3.5 text-sm text-white placeholder:text-slate-600 outline-none transition-all focus:border-accent/60; }
 }
+
+/* Celebration toast — slides down from the top with a small bounce */
+@keyframes celebrate-in {
+  0%   { opacity: 0; transform: translateY(-24px) scale(0.96); }
+  60%  { opacity: 1; transform: translateY(4px)   scale(1.02); }
+  100% { opacity: 1; transform: translateY(0)     scale(1); }
+}
+.animate-celebrate { animation: celebrate-in 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.3); }

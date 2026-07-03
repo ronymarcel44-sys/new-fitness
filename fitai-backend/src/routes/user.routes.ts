@@ -1,4 +1,5 @@
 // fitai-backend/src/routes/user.routes.ts
+// (profile now carries frozen baseline start* fields for progress tracking)
 //
 // All routes here require a valid JWT — protected by the authenticate middleware.
 // Users can only access their own data because we always use req.user.userId
@@ -47,6 +48,13 @@ router.get("/me", async (req: Request, res: Response): Promise<void> => {
       hips:        true,
       arms:        true,
       legs:        true,
+      targetWeight:true,
+      startWeight: true,
+      startChest:  true,
+      startWaist:  true,
+      startHips:   true,
+      startArms:   true,
+      startLegs:   true,
       createdAt:   true,
     },
   });
@@ -70,8 +78,41 @@ router.put("/me", async (req: Request, res: Response): Promise<void> => {
     name, age, height, weight,
     fitnessLevel, goal, diseases,
     chest, waist, hips, arms, legs,
+    targetWeight,
     hasSetup,
   } = req.body;
+
+  // Read current values + existing baselines so we can freeze each metric's
+  // "start" value the FIRST time it's recorded — and never overwrite it after
+  // (this is what keeps the goal/measurement progress anchored to a real start).
+  const existing = await prisma.user.findUnique({
+    where:  { id: req.user!.userId },
+    select: {
+      weight: true, chest: true, waist: true, hips: true, arms: true, legs: true,
+      startWeight: true, startChest: true, startWaist: true, startHips: true, startArms: true, startLegs: true,
+    },
+  });
+
+  // Freeze a baseline only while it's still null. Prefer the value the user had
+  // BEFORE this update (so the very first change already shows progress); fall
+  // back to the incoming value when the metric has never been recorded.
+  const freeze = (
+    startVal: number | null | undefined,
+    prevVal:  number | null | undefined,
+    incoming: unknown,
+  ): number | undefined => {
+    if (startVal != null) return undefined;                          // already frozen
+    if (prevVal  != null) return prevVal;                            // baseline = pre-update value
+    if (incoming !== undefined && incoming) return Number(incoming); // brand-new metric
+    return undefined;
+  };
+
+  const sWeight = freeze(existing?.startWeight, existing?.weight, weight);
+  const sChest  = freeze(existing?.startChest,  existing?.chest,  chest);
+  const sWaist  = freeze(existing?.startWaist,  existing?.waist,  waist);
+  const sHips   = freeze(existing?.startHips,   existing?.hips,   hips);
+  const sArms   = freeze(existing?.startArms,   existing?.arms,   arms);
+  const sLegs   = freeze(existing?.startLegs,   existing?.legs,   legs);
 
   const updated = await prisma.user.update({
     where: { id: req.user!.userId },
@@ -89,7 +130,15 @@ router.put("/me", async (req: Request, res: Response): Promise<void> => {
       ...(hips         !== undefined && { hips:         hips  ? Number(hips)  : null }),
       ...(arms         !== undefined && { arms:         arms  ? Number(arms)  : null }),
       ...(legs         !== undefined && { legs:         legs  ? Number(legs)  : null }),
+      ...(targetWeight !== undefined && { targetWeight: targetWeight ? Number(targetWeight) : null }),
       ...(hasSetup     !== undefined && { hasSetup:     Boolean(hasSetup) }),
+      // Freeze baselines the first time each metric is recorded (see freeze())
+      ...(sWeight !== undefined && { startWeight: sWeight }),
+      ...(sChest  !== undefined && { startChest:  sChest }),
+      ...(sWaist  !== undefined && { startWaist:  sWaist }),
+      ...(sHips   !== undefined && { startHips:   sHips }),
+      ...(sArms   !== undefined && { startArms:   sArms }),
+      ...(sLegs   !== undefined && { startLegs:   sLegs }),
     },
     select: {
       id:          true,
@@ -109,6 +158,13 @@ router.put("/me", async (req: Request, res: Response): Promise<void> => {
       hips:        true,
       arms:        true,
       legs:        true,
+      targetWeight:true,
+      startWeight: true,
+      startChest:  true,
+      startWaist:  true,
+      startHips:   true,
+      startArms:   true,
+      startLegs:   true,
     },
   });
 

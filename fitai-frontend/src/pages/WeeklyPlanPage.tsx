@@ -2,7 +2,7 @@ import { Lock } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
-import { toggleDone, toggleDayType, setSelectedDay } from "@/features/workout/workoutSlice";
+import { toggleDone, toggleDayType, toggleDayTypeThunk, setSelectedDay } from "@/features/workout/workoutSlice";
 import { DAYS_ORDER, type DayName } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -27,12 +27,14 @@ export function WeeklyPlanPage() {
     );
   }
 
-  const trainingDays = DAYS_ORDER.filter((d) => weeklyPlan[d].type === "تمرين").length;
-  const restDays     = DAYS_ORDER.filter((d) => weeklyPlan[d].type === "راحة").length;
+  // Guard every weeklyPlan[day] access: an AI-generated plan can occasionally
+  // omit a day, and an unguarded `.type` / `.exercises` read crashes the page.
+  const trainingDays = DAYS_ORDER.filter((d) => weeklyPlan[d]?.type === "تمرين").length;
+  const restDays     = DAYS_ORDER.filter((d) => weeklyPlan[d]?.type === "راحة").length;
 
   const selectedDayData = weeklyPlan[selectedDay];
-  const totalEx  = selectedDayData?.exercises.length ?? 0;
-  const doneEx   = selectedDayData?.exercises.filter((e) => e.done).length ?? 0;
+  const totalEx  = selectedDayData?.exercises?.length ?? 0;
+  const doneEx   = selectedDayData?.exercises?.filter((e) => e.done).length ?? 0;
 
   return (
     <div className="mx-auto max-w-5xl px-6 pb-20 pt-28">
@@ -51,7 +53,7 @@ export function WeeklyPlanPage() {
         </Card>
         <Card className="text-center">
           <div className="text-3xl font-black text-brand-orange">
-            {DAYS_ORDER.reduce((acc, d) => acc + weeklyPlan[d].exercises.filter(e => e.done).length, 0)}
+            {DAYS_ORDER.reduce((acc, d) => acc + (weeklyPlan[d]?.exercises?.filter(e => e.done).length ?? 0), 0)}
           </div>
           <div className="mt-1 text-xs text-slate-500">تمارين منجزة</div>
         </Card>
@@ -62,7 +64,7 @@ export function WeeklyPlanPage() {
         {DAYS_ORDER.map((day, idx) => {
           const isPast    = idx < TODAY_IDX;
           const isToday   = day === TODAY;
-          const isRest    = weeklyPlan[day].type === "راحة";
+          const isRest    = weeklyPlan[day]?.type === "راحة";
           const isSelected = day === selectedDay;
 
           return (
@@ -84,7 +86,7 @@ export function WeeklyPlanPage() {
               {isToday && <span className="mt-0.5 text-[10px] text-accent">اليوم</span>}
               {!isToday && (
                 <span className={cn("mt-0.5 text-[10px]", isRest ? "text-slate-600" : "text-slate-500")}>
-                  {isRest ? "راحة" : `${weeklyPlan[day].exercises.length} تمارين`}
+                  {isRest ? "راحة" : `${weeklyPlan[day]?.exercises?.length ?? 0} تمارين`}
                 </span>
               )}
             </button>
@@ -112,7 +114,11 @@ export function WeeklyPlanPage() {
             {/* زر تبديل نوع اليوم — متاح فقط لليوم والمستقبل */}
             {DAYS_ORDER.indexOf(selectedDay) >= TODAY_IDX ? (
               <button
-                onClick={() => dispatch(toggleDayType(selectedDay))}
+                onClick={() => {
+                  const newType = selectedDayData.type === "تمرين" ? "راحة" : "تمرين";
+                  dispatch(toggleDayType(selectedDay));            // instant UI flip
+                  dispatch(toggleDayTypeThunk({ day: selectedDay, type: newType })); // persist
+                }}
                 className={cn(
                   "rounded-full border px-4 py-1.5 text-xs font-semibold transition-all",
                   selectedDayData.type === "راحة"
@@ -151,7 +157,7 @@ export function WeeklyPlanPage() {
             </Card>
           ) : (
             <div className="space-y-3">
-              {selectedDayData.exercises.map((ex, i) => {
+              {(selectedDayData.exercises ?? []).map((ex, i) => {
                 const isPastDay = DAYS_ORDER.indexOf(selectedDay) < TODAY_IDX;
                 return (
                   <div key={ex.id}

@@ -1,0 +1,200 @@
+<h2>Hero — النسخة النظيفة</h2>
+<p class="subtitle">بدون ضجة — بطاقتان فقط، صورة بريميوم، طابع مستقبلي هادئ</p>
+
+<!-- PHOTO OPTIONS first -->
+<div style="margin-bottom:28px;">
+  <p style="color:#94a3b8;font-size:12px;margin-bottom:14px;text-align:center;">اختر الصورة الخلفية أولاً — ثم شوف التصميم الكامل تحت</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+
+    <!-- Photo A: Premium wellness coach -->
+    <div onclick="showPhoto('a')" id="photo-a" style="cursor:pointer;border:2px solid rgba(0,229,160,0.5);border-radius:10px;overflow:hidden;position:relative;">
+      <img src="https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=500&q=80&auto=format&fit=crop&crop=center" style="width:100%;height:140px;object-fit:cover;display:block;opacity:0.7;"/>
+      <div style="position:absolute;bottom:0;left:0;right:0;padding:8px 10px;background:rgba(0,0,0,0.7);">
+        <div style="color:#00E5A0;font-size:10px;font-weight:700;">A — رياضي + حركة (مختار)</div>
+        <div style="color:#64748b;font-size:9px;">طابع قوة وتطور — اللون دافئ</div>
+      </div>
+    </div>
+
+    <!-- Photo B: Food + coach blend -->
+    <div onclick="showPhoto('b')" id="photo-b" style="cursor:pointer;border:2px solid rgba(255,255,255,0.08);border-radius:10px;overflow:hidden;position:relative;">
+      <div style="position:relative;height:140px;overflow:hidden;">
+        <img src="https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=250&q=80&auto=format&fit=crop&crop=center" style="position:absolute;right:0;top:0;width:50%;height:100%;object-fit:cover;opacity:0.8;"/>
+        <img src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=250&q=80&auto=format&fit=crop&crop=center" style="position:absolute;left:0;top:0;width:50%;height:100%;object-fit:cover;opacity:0.8;"/>
+        <div style="position:absolute;inset:0;background:linear-gradient(90deg,rgba(10,14,26,0.3) 0%,rgba(0,229,160,0.08) 50%,rgba(10,14,26,0.3) 100%);"></div>
+      </div>
+      <div style="position:absolute;bottom:0;left:0;right:0;padding:8px 10px;background:rgba(0,0,0,0.7);">
+        <div style="color:#94a3b8;font-size:10px;font-weight:700;">B — أكل صحي + رياضي (مدمج)</div>
+        <div style="color:#64748b;font-size:9px;">يوصل التغذية + التمارين معاً</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ===== HERO PREVIEW ===== -->
+<div class="mockup">
+  <div class="mockup-header">معاينة الـ Hero — النسخة النظيفة</div>
+  <div class="mockup-body" style="padding:0;overflow:hidden;">
+
+    <div id="hero-container" style="
+      position:relative;
+      min-height:520px;
+      background:#000;
+      overflow:hidden;
+      direction:rtl;
+      font-family:Tajawal,Arial,sans-serif;
+    ">
+
+      <!-- PHOTO A (default) -->
+      <div id="bg-a" style="position:absolute;inset:0;">
+        <img
+          src="https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=1000&q=80&auto=format&fit=crop&crop=center"
+          style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;opacity:0.32;"
+        />
+      </div>
+
+      <!-- PHOTO B (hidden by default) -->
+      <div id="bg-b" style="position:absolute;inset:0;display:none;">
+        <img src="https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=500&q=80&auto=format&fit=crop&crop=center"
+          style="position:absolute;right:0;top:0;width:55%;height:100%;object-fit:cover;opacity:0.28;"/>
+        <img src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=500&q=80&auto=format&fit=crop&crop=center"
+          style="position:absolute;left:0;top:0;width:55%;height:100%;object-fit:cover;opacity:0.28;"/>
+        <div style="position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(0,0,0,0.2) 0%,rgba(10,14,26,0.5) 100%);"></div>
+      </div>
+
+      <!-- Dark gradient — always on top of photo -->
+      <div style="position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,0.05) 0%,rgba(10,14,26,0.4) 32%,rgba(10,14,26,0.92) 58%,#0a0e1a 100%);"></div>
+
+      <!-- ONE cinematic beam — subtle -->
+      <div style="position:absolute;top:0;right:36%;width:1px;height:55%;background:linear-gradient(180deg,rgba(0,229,160,0.75),transparent);box-shadow:0 0 28px rgba(0,229,160,0.35),0 0 55px rgba(0,229,160,0.12);"></div>
+
+      <!-- 3 particles only -->
+      <div style="position:absolute;top:22%;right:32%;width:3px;height:3px;background:#00E5A0;border-radius:50%;box-shadow:0 0 8px #00E5A0;opacity:0.6;"></div>
+      <div style="position:absolute;top:48%;right:24%;width:2px;height:2px;background:#3B82F6;border-radius:50%;box-shadow:0 0 6px #3B82F6;opacity:0.5;"></div>
+      <div style="position:absolute;top:68%;right:40%;width:2px;height:2px;background:#A855F7;border-radius:50%;box-shadow:0 0 5px #A855F7;opacity:0.55;"></div>
+
+      <!-- Very subtle grid on dark side only -->
+      <div style="position:absolute;top:0;left:0;width:38%;height:100%;background-image:linear-gradient(rgba(0,229,160,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,160,0.025) 1px,transparent 1px);background-size:36px 36px;"></div>
+
+      <!-- ===== FLOATING CARDS — 2 only, elegant & small ===== -->
+
+      <!-- Card 1: Body analysis (top-left area, over photo) -->
+      <div style="
+        position:absolute;
+        top:14%;
+        left:4%;
+        background:rgba(10,14,26,0.55);
+        border:1px solid rgba(0,229,160,0.2);
+        border-radius:10px;
+        padding:10px 14px;
+        backdrop-filter:blur(10px);
+        min-width:150px;
+      ">
+        <div style="color:#00E5A0;font-size:9px;font-weight:700;letter-spacing:0.8px;margin-bottom:6px;opacity:0.8;">تحليل التقدم</div>
+        <div style="display:flex;align-items:baseline;gap:4px;margin-bottom:4px;">
+          <span style="color:white;font-size:18px;font-weight:900;">-4.2</span>
+          <span style="color:#94a3b8;font-size:10px;">كغ هذا الشهر</span>
+        </div>
+        <div style="height:2px;background:rgba(0,229,160,0.12);border-radius:2px;overflow:hidden;">
+          <div style="height:100%;width:68%;background:linear-gradient(90deg,#00E5A0,#3B82F6);border-radius:2px;"></div>
+        </div>
+        <div style="color:#475569;font-size:8px;margin-top:4px;">68% من هدفك</div>
+      </div>
+
+      <!-- Card 2: Today's plan (lower-left) -->
+      <div style="
+        position:absolute;
+        bottom:22%;
+        left:3%;
+        background:rgba(10,14,26,0.55);
+        border:1px solid rgba(59,130,246,0.18);
+        border-radius:10px;
+        padding:10px 14px;
+        backdrop-filter:blur(10px);
+        min-width:160px;
+      ">
+        <div style="color:#3B82F6;font-size:9px;font-weight:700;letter-spacing:0.8px;margin-bottom:6px;opacity:0.8;">خطة اليوم · الذكاء الاصطناعي</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+          <div style="width:3px;height:28px;background:#00E5A0;border-radius:2px;"></div>
+          <div>
+            <div style="color:white;font-size:11px;font-weight:700;">بنش برس 4×10</div>
+            <div style="color:#475569;font-size:8px;">1,850 سعرة • 148g بروتين</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== TEXT CONTENT ===== -->
+      <div style="position:relative;z-index:10;padding:54px 44px;max-width:490px;margin-right:auto;">
+
+        <!-- Badge -->
+        <div style="display:inline-flex;align-items:center;gap:8px;background:rgba(0,229,160,0.06);border:1px solid rgba(0,229,160,0.25);border-radius:20px;padding:6px 15px;margin-bottom:28px;">
+          <div style="width:6px;height:6px;background:#00E5A0;border-radius:50%;box-shadow:0 0 8px #00E5A0;"></div>
+          <span style="color:#00E5A0;font-size:11px;font-weight:600;letter-spacing:0.3px;">مدرّبك الذكي • مدعوم بالـ AI</span>
+        </div>
+
+        <!-- Headline — clean, two lines -->
+        <h1 style="font-size:42px;font-weight:900;color:white;line-height:1.18;margin-bottom:18px;">
+          مدرّب يفهم جسمك<br>
+          <span style="background:linear-gradient(135deg,#00E5A0 20%,#3B82F6 80%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">ويتطور معك</span>
+        </h1>
+
+        <!-- Subtext — one clean line -->
+        <p style="color:#64748b;font-size:15px;line-height:1.7;margin-bottom:36px;max-width:370px;">
+          ذكاء اصطناعي يبني لك برنامج تمارين وتغذية مخصص — ويعدّله كل أسبوع بناءً على نتائجك الحقيقية.
+        </p>
+
+        <!-- CTAs -->
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:44px;">
+          <div style="background:linear-gradient(135deg,#00E5A0,#00c987);color:#0a0e1a;padding:14px 30px;border-radius:11px;font-size:15px;font-weight:900;box-shadow:0 0 28px rgba(0,229,160,0.35),0 0 55px rgba(0,229,160,0.15);cursor:pointer;">
+            ابدأ مجاناً ←
+          </div>
+          <div style="border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.7);padding:14px 26px;border-radius:11px;font-size:14px;font-weight:500;cursor:pointer;">
+            شوف كيف يشتغل
+          </div>
+        </div>
+
+        <!-- Stats — minimal -->
+        <div style="display:flex;gap:28px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:22px;font-weight:900;color:#00E5A0;">+500</div>
+            <div style="font-size:10px;color:#475569;margin-top:2px;">مستخدم نشط</div>
+          </div>
+          <div style="width:1px;background:rgba(255,255,255,0.06);"></div>
+          <div>
+            <div style="font-size:22px;font-weight:900;color:#3B82F6;">98%</div>
+            <div style="font-size:10px;color:#475569;margin-top:2px;">نسبة الرضا</div>
+          </div>
+          <div style="width:1px;background:rgba(255,255,255,0.06);"></div>
+          <div>
+            <div style="font-size:22px;font-weight:900;color:#A855F7;">مجاني</div>
+            <div style="font-size:10px;color:#475569;margin-top:2px;">للبداية</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scroll hint -->
+      <div style="position:absolute;bottom:20px;left:50%;transform:translateX(-50%);text-align:center;z-index:10;">
+        <div style="width:18px;height:30px;border:1px solid rgba(255,255,255,0.15);border-radius:9px;margin:0 auto;display:flex;align-items:flex-start;justify-content:center;padding-top:4px;">
+          <div style="width:3px;height:7px;background:#00E5A0;border-radius:2px;opacity:0.7;"></div>
+        </div>
+        <div style="color:#334155;font-size:9px;margin-top:4px;">اسحب للأسفل</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:14px;padding:12px 16px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:8px;">
+  <p style="color:#475569;font-size:11px;margin:0;text-align:center;">انقر A أو B أعلاه لتبديل الصورة الخلفية · وافق على الاتجاه وانتقل لتصميم باقي الصفحة</p>
+</div>
+
+<script>
+function showPhoto(choice) {
+  document.getElementById('bg-a').style.display = choice === 'a' ? 'block' : 'none';
+  document.getElementById('bg-b').style.display = choice === 'b' ? 'block' : 'none';
+  document.getElementById('photo-a').style.borderColor = choice === 'a' ? 'rgba(0,229,160,0.5)' : 'rgba(255,255,255,0.08)';
+  document.getElementById('photo-b').style.borderColor = choice === 'b' ? 'rgba(0,229,160,0.5)' : 'rgba(255,255,255,0.08)';
+  document.querySelector('#photo-a div:last-child div:first-child').style.color = choice === 'a' ? '#00E5A0' : '#94a3b8';
+  document.querySelector('#photo-b div:last-child div:first-child').style.color = choice === 'b' ? '#00E5A0' : '#94a3b8';
+}
+</script>

@@ -16,8 +16,26 @@ router.use(authenticate);
 // Returns the active workout plan so the frontend can reload it on page refresh.
 // Returns null if the user has no active plan yet.
 router.get("/", async (req: Request, res: Response): Promise<void> => {
+  const userId = req.user!.userId;
+
+  // Daily reset: a checkmark should reflect TODAY only. Clear `done` for any
+  // exercise of the active plan completed before today (keep `doneAt` so the
+  // 7-day "workouts completed" analytics in buildUserContext stay intact).
+  const todayStart = new Date();
+  todayStart.setUTCHours(0, 0, 0, 0);
+  const active = await prisma.workoutPlan.findFirst({
+    where:  { userId, isActive: true },
+    select: { id: true },
+  });
+  if (active) {
+    await prisma.workoutExercise.updateMany({
+      where: { planId: active.id, done: true, doneAt: { lt: todayStart } },
+      data:  { done: false },
+    });
+  }
+
   const plan = await prisma.workoutPlan.findFirst({
-    where:   { userId: req.user!.userId, isActive: true },
+    where:   { userId, isActive: true },
     include: {
       exercises: {
         orderBy: [{ dayOfWeek: "asc" }, { sortOrder: "asc" }],
@@ -124,6 +142,36 @@ router.patch("/exercises/:id/done", async (req: Request, res: Response): Promise
   });
 
   res.json(updated);
+});
+
+// ── PATCH /workout/days/type ──────────────────────────────────────────────────
+// Switch a whole day between training and rest for the user's active plan.
+// Updates the dayType of every exercise row on that day (the exercises stay —
+// a "rest" day keeps its hidden workout so it can be switched back on).
+// Body: { day, type } where type is the Arabic label ("تمرين" | "راحة").
+router.patch("/days/type", async (req: Request, res: Response): Promise<void> => {
+  const { day, type } = req.body as { day?: string; type?: string };
+
+  if (!day || (type !== "تمرين" && type !== "راحة")) {
+    res.status(400).json({ error: "day and a valid type (تمرين|راحة) are required" });
+    return;
+  }
+
+  const plan = await prisma.workoutPlan.findFirst({
+    where:  { userId: req.user!.userId, isActive: true },
+    select: { id: true },
+  });
+  if (!plan) {
+    res.status(404).json({ error: "No active plan" });
+    return;
+  }
+
+  await prisma.workoutExercise.updateMany({
+    where: { planId: plan.id, dayOfWeek: day },
+    data:  { dayType: type === "تمرين" ? "training" : "rest" },
+  });
+
+  res.json({ ok: true });
 });
 
 export default router;
