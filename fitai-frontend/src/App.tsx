@@ -10,10 +10,11 @@ import { useAppSelector, useAppDispatch }          from "@/app/hooks";
 import { fetchProfileThunk, fetchCoachThunk, fetchCoachNotesThunk } from "@/features/user/userSlice";
 import { fetchWorkoutThunk }                       from "@/features/workout/workoutSlice";
 import { fetchNutritionThunk, fetchMealLogsThunk } from "@/features/nutrition/nutritionSlice";
-import { fetchProgressThunk }                      from "@/features/progress/progressSlice";
+import { fetchProgressThunk, fetchActivityThunk }  from "@/features/progress/progressSlice";
 import { fetchChatThunk }                          from "@/features/chat/chatSlice";
 import { Navbar }                                  from "@/components/layout/Navbar";
 import { CoachChatBubble }                          from "@/components/chat/CoachChatBubble";
+import { CelebrationToast }                          from "@/components/goal/CelebrationToast";
 
 // User Pages
 import { LandingPage }        from "@/pages/LandingPage";
@@ -76,6 +77,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
       <Navbar />
       {children}
       <CoachChatBubble />
+      <CelebrationToast />
     </div>
   );
 }
@@ -96,6 +98,7 @@ export default function App() {
       dispatch(fetchNutritionThunk());  // Step 7
       dispatch(fetchMealLogsThunk());   // Step 7
       dispatch(fetchProgressThunk());   // Step 8
+      dispatch(fetchActivityThunk());   // commitment streak (persisted server-side)
       dispatch(fetchChatThunk());       // Step 8
     }
   }, [isLoggedIn, role, dispatch]);

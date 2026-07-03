@@ -11,6 +11,7 @@
 import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/toolkit";
 import { apiRequest } from "@/lib/api";
 import type { NutritionPlan, Meal } from "@/types";
+import { markActiveTodayThunk } from "@/features/progress/progressSlice";
 
 interface BackendMeal {
   id:       string;
@@ -23,6 +24,7 @@ interface BackendMeal {
   items:    string[];
   emoji:    string | null;
   coachEdited: boolean;
+  dayOfWeek?:  string | null;
 }
 
 interface BackendPlan {
@@ -43,6 +45,7 @@ interface BackendMealLog {
   fatG:     number;
   loggedAt: string;
   name?:    string;
+  source?:  string | null;
 }
 
 // Convert backend plan to the frontend NutritionPlan shape
@@ -63,6 +66,7 @@ function backendToFrontendPlan(plan: BackendPlan): NutritionPlan {
       items:    m.items,
       emoji:    m.emoji ?? "🍽️",
       coachEdited: m.coachEdited,
+      dayOfWeek: m.dayOfWeek ?? undefined,
     })),
   };
 }
@@ -78,6 +82,7 @@ function backendLogToMeal(log: BackendMealLog): Meal {
     time:     new Date(log.loggedAt).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" }),
     items:    [],
     emoji:    "🍽️",
+    source:   (log.source ?? undefined) as Meal["source"],
   };
 }
 
@@ -104,6 +109,19 @@ export const saveNutritionThunk = createAsyncThunk<void, NutritionPlan>(
   }
 );
 
+// Generate + save the 7-day meal plan from the daily targets (server picks foods,
+// computes macros to match the targets). Returns the full plan for state.
+export const generateMealPlanThunk = createAsyncThunk<
+  NutritionPlan,
+  { totalCalories: number; protein: number; carbs: number; fat: number }
+>(
+  "nutrition/generateMealPlan",
+  async (targets) => {
+    const plan = await apiRequest<BackendPlan>("POST", "/ai/generate-meal-plan", targets);
+    return backendToFrontendPlan(plan);
+  }
+);
+
 export const fetchMealLogsThunk = createAsyncThunk<Meal[], void>(
   "nutrition/fetchLogs",
   async () => {
@@ -114,16 +132,21 @@ export const fetchMealLogsThunk = createAsyncThunk<Meal[], void>(
 
 export const logMealThunk = createAsyncThunk<Meal, Meal>(
   "nutrition/logMeal",
-  async (meal) => {
+  async (meal, { dispatch }) => {
     const body = {
       mealId:   null,
       name:     meal.name,
+      source:   meal.source,
       calories: meal.calories,
       protein:  meal.protein,
       carbs:    meal.carbs,
       fat:      meal.fat,
     };
     const saved = await apiRequest<BackendMealLog>("POST", "/nutrition/logs", body);
+    // Re-evaluate today's commitment. The backend only bumps the streak when BOTH
+    // the meals (calorie target) AND the workout are done today, and is idempotent
+    // per day — so this fires on every meal log but counts the day at most once.
+    dispatch(markActiveTodayThunk());
     return backendLogToMeal({ ...saved, name: meal.name });
   }
 );
@@ -224,6 +247,10 @@ const nutritionSlice = createSlice({
   extraReducers: (builder) => {
     builder.addCase(fetchNutritionThunk.fulfilled, (state, action) => {
       if (action.payload) state.plan = action.payload;
+    });
+
+    builder.addCase(generateMealPlanThunk.fulfilled, (state, action) => {
+      state.plan = action.payload;
     });
 
     builder.addCase(fetchMealLogsThunk.fulfilled, (state, action) => {

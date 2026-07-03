@@ -10,6 +10,7 @@ import adminReducer     from "@/features/admin/adminSlice";
 import coachReducer     from "@/features/coach/coachSlice"; // [added] Step 10
 import messagesReducer  from "@/features/messages/messagesSlice"; // coach chat
 import notificationsReducer from "@/features/notifications/notificationsSlice";
+import celebrationReducer from "@/features/celebration/celebrationSlice"; // achievement toasts
 
 // The auth session (tokens + identity) is persisted to localStorage so the user
 // stays logged in across a full page reload — critical for the Stripe Checkout
@@ -41,6 +42,7 @@ export const store = configureStore({
     coach:     coachReducer, // [added]
     messages:  messagesReducer,
     notifications: notificationsReducer,
+    celebration: celebrationReducer,
   },
   preloadedState: loadAuthState(),
 });

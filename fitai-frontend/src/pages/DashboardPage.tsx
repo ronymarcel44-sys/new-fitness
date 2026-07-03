@@ -7,6 +7,7 @@ import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { toggleDone, toggleDoneThunk } from "@/features/workout/workoutSlice"; // [added] toggleDoneThunk
 import { DAYS_ORDER } from "@/types";
 import { getGoalLabel } from "@/lib/goalLabels";
+import { GoalProgressMini } from "@/components/goal/GoalProgressMini";
 
 export function DashboardPage() {
   const dispatch   = useAppDispatch();
@@ -14,6 +15,7 @@ export function DashboardPage() {
   const { profile }                  = useAppSelector((s) => s.user);
   const { weeklyPlan }               = useAppSelector((s) => s.workout);
   const { plan: nutritionPlan, dailyLog } = useAppSelector((s) => s.nutrition);
+  const { streak }                   = useAppSelector((s) => s.progress);
 
   const todayName     = DAYS_ORDER[new Date().getDay()];
   const todaySchedule = weeklyPlan?.[todayName];
@@ -89,7 +91,7 @@ export function DashboardPage() {
           { label: "السعرات اليوم",    val: `${consumed.calories}`, unit: `/ ${nutritionPlan?.totalCalories ?? 0} kcal`, icon: "🔥", color: caloriesOver ? "text-red-400" : "text-brand-orange" },
           { label: "تمارين اليوم",     val: `${doneCount}`,         unit: todaySchedule?.type === "راحة" ? "يوم راحة 🛌" : `/ ${todayExercises.length} تمارين`, icon: "💪", color: "text-accent" },
           { label: "الوزن الحالي",     val: profile.weight || "—",  unit: "كغ",  icon: "⚖️", color: "text-brand-blue"   },
-          { label: "الهدف",            val: getGoalLabel(profile.goal),  unit: "",    icon: "🏆", color: "text-brand-purple" },
+          { label: "الالتزام",          val: `${streak}`,            unit: "يوم متتالي 🔥", icon: "🔥", color: "text-brand-orange" },
         ].map(({ label, val, unit, icon, color }) => (
           <Card key={label}>
             <div className="mb-3 flex items-start justify-between">
@@ -101,6 +103,9 @@ export function DashboardPage() {
           </Card>
         ))}
       </div>
+
+      {/* Goal journey at a glance */}
+      <GoalProgressMini />
 
       {/* تحذير تجاوز السعرات */}
       {caloriesOver && (

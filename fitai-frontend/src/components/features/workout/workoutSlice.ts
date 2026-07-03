@@ -52,10 +52,14 @@ function backendToWeeklyPlan(plan: BackendPlan): WeeklyPlan {
     const day = ex.dayOfWeek as DayName;
     if (!weekly[day]) return;
 
-    // Set day type and focus from the first exercise of this day
+    // Mark the day as training if any of its rows are training.
     if (ex.dayType === "training") {
-      weekly[day].type  = "تمرين";
-      weekly[day].focus = ex.focus ?? "";
+      weekly[day].type = "تمرين";
+    }
+    // Capture focus from the first row that has one — including rest days, so a
+    // rest day keeps its focus label when it's switched to training after a reload.
+    if (!weekly[day].focus && ex.focus) {
+      weekly[day].focus = ex.focus;
     }
 
     // Convert backend row back to the Exercise shape the frontend uses
@@ -133,6 +137,24 @@ export const toggleDoneThunk = createAsyncThunk<
     } catch (err) {
       console.error("Failed to toggle exercise done:", err);
       return rejectWithValue(err instanceof Error ? err.message : "Failed to update exercise");
+    }
+  }
+);
+
+// Persist a whole-day rest/training switch to the database. Dispatched alongside
+// the synchronous toggleDayType action (which already flipped the UI instantly).
+export const toggleDayTypeThunk = createAsyncThunk<
+  void,
+  { day: DayName; type: "تمرين" | "راحة" },
+  { rejectValue: string }
+>(
+  "workout/toggleDayType",
+  async ({ day, type }, { rejectWithValue }) => {
+    try {
+      await apiRequest("PATCH", "/workout/days/type", { day, type });
+    } catch (err) {
+      console.error("Failed to persist day type:", err);
+      return rejectWithValue(err instanceof Error ? err.message : "Failed to update day type");
     }
   }
 );

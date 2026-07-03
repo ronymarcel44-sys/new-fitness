@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { ArrowRight, Play, ChevronLeft, ChevronRight, Loader2, RefreshCw, Bell } from "lucide-react";
 import { useAppSelector, useAppDispatch } from "@/app/hooks";
-import { toggleDone, toggleDoneThunk, setPlan, saveSetWeight, completeSet, resetExerciseSets } from "@/features/workout/workoutSlice";import { markActiveToday } from "@/features/progress/progressSlice";
+import { toggleDone, toggleDoneThunk, setPlan, completeSet, resetExerciseSets } from "@/features/workout/workoutSlice";import { markActiveTodayThunk } from "@/features/progress/progressSlice";
 import { checkDayReset } from "@/features/nutrition/nutritionSlice";
 import { DAYS_ORDER, type DayName, type Exercise } from "@/types";
 import { cn } from "@/lib/utils";
@@ -22,6 +22,15 @@ function getSetWeight(weightStr: string, setIdx: number): string {
   // إذا كانت الوحدة تحتوي "دمبل"
   if (weightStr.toLowerCase().includes("دمبل")) return `دمبل ${val} كغ`;
   return `${val} ${unit}`.trim();
+}
+
+// يستخرج تكرارات سيت معين من نص مثل "12/10/8" — لكل سيت رقمه الخاص.
+// إذا كان هناك رقم واحد فقط ("10") يُستخدم لكل السيتات (توافق مع الخطط القديمة).
+function getSetReps(repsStr: string, setIdx: number): string {
+  if (!repsStr) return "";
+  const parts = repsStr.split("/").map((p) => p.trim()).filter(Boolean);
+  if (parts.length <= 1) return repsStr; // قيمة واحدة لكل السيتات (أو مدة مثل "20 دقيقة")
+  return parts[Math.min(setIdx, parts.length - 1)];
 }
 
 // هل التمرين يستخدم أوزان (مش وزن الجسم أو فارغ)
@@ -79,9 +88,8 @@ export function ExerciseDetailPage() {
   const totalSets   = parseInt(exercise?.sets ?? "0") || 0;
   const restSeconds = parseInt((exercise?.rest ?? "60").replace(/[^0-9]/g, "")) || 60;
 
-  const { setWeights: allWeights, completedSets: allCompleted } = useAppSelector((s) => s.workout);
+  const { completedSets: allCompleted } = useAppSelector((s) => s.workout);
   const completedSets = allCompleted[exercise?.id ?? ""] ?? [];
-  const weights       = allWeights[exercise?.id ?? ""] ?? Array(totalSets).fill("");
 
   const [restTimer, setRestTimer] = useState<number>(0);
   const [isResting, setIsResting] = useState(false);
@@ -147,7 +155,7 @@ export function ExerciseDetailPage() {
     if (totalSets > 0 && completedSets.length === totalSets && !exercise.done) {
      dispatch(toggleDone({ day, exerciseId: exercise.id }));
       dispatch(toggleDoneThunk({ exerciseId: exercise.id, done: true })); // [added] persist to DB
-      dispatch(markActiveToday());
+      dispatch(markActiveTodayThunk());
     }
   }, [completedSets.length]);
 
@@ -467,10 +475,10 @@ export function ExerciseDetailPage() {
                     )}>
                       {getSetWeight(exercise.weight, i)}
                     </span>
+                    <span className="text-[10px] text-slate-600">{getSetReps(exercise.reps, i)} تكرار</span>
                   </div>
                 ))}
               </div>
-              <p className="mt-2 text-xs text-slate-600">{exercise.reps} تكرار لكل سيت</p>
             </div>
           )}
 
@@ -506,7 +514,7 @@ export function ExerciseDetailPage() {
                         السيت {i + 1}
                       </p>
                       <p className="text-xs text-slate-600">
-                        {exercise.reps} تكرار
+                        {getSetReps(exercise.reps, i)} تكرار
                         {exercise.weight && hasEquipmentWeight(exercise.weight) && (
                           <span className="mr-1 text-brand-orange">· {getSetWeight(exercise.weight, i)}</span>
                         )}
@@ -516,7 +524,6 @@ export function ExerciseDetailPage() {
                     {/* زر إنجاز / حالة */}
                     {isDone && (
                       <div className="text-right">
-                        {weights[i] && <p className="text-xs font-bold text-accent">{weights[i]} كغ</p>}
                         <p className="text-xs text-slate-600">مكتمل ✓</p>
                       </div>
                     )}
@@ -533,35 +540,6 @@ export function ExerciseDetailPage() {
                     )}
                   </div>
 
-                  {/* حقل تسجيل الوزن الفعلي — يظهر فقط إذا كان التمرين يستخدم أوزان */}
-                  {isActive && !isResting && hasEquipmentWeight(exercise.weight ?? "") && (
-                    <div className="border-t border-accent/10 bg-accent/5 px-3 py-2.5">
-                      <p className="mb-1.5 text-xs text-slate-500">
-                        سجّل الوزن الفعلي
-                        <span className="mr-1 text-brand-orange">(مقترح: {getSetWeight(exercise.weight ?? "", i)})</span>
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          placeholder={getSetWeight(exercise.weight ?? "", i).replace(/[^0-9.]/g, "") || "0"}
-                          value={weights[i]}
-                          onChange={(e) => {
-                            dispatch(saveSetWeight({ exerciseId: exercise!.id, setIdx: i, weight: e.target.value }));
-                          }}
-                          className="w-24 rounded-lg border border-white/10 bg-bg px-3 py-1.5 text-center text-sm font-bold text-white outline-none focus:border-accent/50"
-                        />
-                        <span className="text-sm text-slate-400">كغ</span>
-                        <button
-                          onClick={() => {
-                            const suggested = exercise.weight?.replace(/[^0-9.]/g, "") || "";
-                            dispatch(saveSetWeight({ exerciseId: exercise!.id, setIdx: i, weight: suggested }));
-                          }}
-                          className="rounded-lg border border-brand-orange/20 bg-brand-orange/5 px-2.5 py-1.5 text-xs text-brand-orange hover:bg-brand-orange/10 transition-all">
-                          استخدم المقترح
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </div>
               );
             })}

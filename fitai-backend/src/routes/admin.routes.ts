@@ -81,9 +81,9 @@ router.get("/users", async (_req: Request, res: Response): Promise<void> => {
     plan:           u.plan,
     status:         u.status,
     joinedAt:       u.createdAt.toISOString().slice(0, 10),
-    lastActive:     u.updatedAt.toISOString().slice(0, 10),
+    lastActive:     u.lastActiveDate ?? u.updatedAt.toISOString().slice(0, 10),
     hasWorkoutPlan: u._count.workoutPlans > 0,
-    streak:         0, // computed client-side from progress entries
+    streak:         u.streak,
     coachId:        u.coachAssignment?.coachId,
   })));
 });

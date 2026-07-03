@@ -84,7 +84,11 @@ export async function apiRequest<T = unknown>(
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error ?? `Request failed with status ${response.status}`);
+    const err = new Error(data.error ?? `Request failed with status ${response.status}`) as
+      Error & { status?: number; retryAfter?: number };
+    err.status = response.status;
+    if (typeof data.retryAfter === "number") err.retryAfter = data.retryAfter;
+    throw err;
   }
 
   return data as T;

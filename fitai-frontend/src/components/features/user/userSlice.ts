@@ -32,6 +32,13 @@ interface BackendProfile {
   hips:        number | null;
   arms:        number | null;
   legs:        number | null;
+  targetWeight:number | null;
+  startWeight: number | null;
+  startChest:  number | null;
+  startWaist:  number | null;
+  startHips:   number | null;
+  startArms:   number | null;
+  startLegs:   number | null;
 }
 
 interface UserState {
@@ -71,6 +78,13 @@ function backendToFrontend(data: BackendProfile): Partial<UserProfile> {
     hips:              data.hips?.toString()          ?? "",
     arms:              data.arms?.toString()          ?? "",
     legs:              data.legs?.toString()          ?? "",
+    targetWeight:      data.targetWeight?.toString()  ?? "",
+    startWeight:       data.startWeight?.toString()   ?? "",
+    startChest:        data.startChest?.toString()    ?? "",
+    startWaist:        data.startWaist?.toString()    ?? "",
+    startHips:         data.startHips?.toString()     ?? "",
+    startArms:         data.startArms?.toString()     ?? "",
+    startLegs:         data.startLegs?.toString()     ?? "",
     hasCompletedSetup: data.hasSetup,
     plan:              (data.plan as "free" | "premium") ?? "free",
   };
@@ -121,6 +135,9 @@ export const saveProfileThunk = createAsyncThunk<
         hips:        profileData.hips   ? Number(profileData.hips)   : undefined,
         arms:        profileData.arms   ? Number(profileData.arms)   : undefined,
         legs:        profileData.legs   ? Number(profileData.legs)   : undefined,
+        // Pass the raw value: "75" → 75, "" → clears to null (revert to auto),
+        // undefined → omitted so other saves never wipe an existing target.
+        targetWeight:profileData.targetWeight,
         hasSetup:    profileData.hasCompletedSetup,
       };
       const data = await apiRequest<BackendProfile>("PUT", "/users/me", body);

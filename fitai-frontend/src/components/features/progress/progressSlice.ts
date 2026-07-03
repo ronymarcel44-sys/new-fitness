@@ -8,6 +8,8 @@
 import { createSlice, createAsyncThunk, type PayloadAction } from "@reduxjs/toolkit";
 import { apiRequest } from "@/lib/api";
 import type { WeightEntry } from "@/types";
+import { STREAK_LADDER } from "@/lib/goalTracker";
+import { celebrate } from "@/features/celebration/celebrationSlice";
 
 interface BackendProgressEntry {
   id:        string;
@@ -30,11 +32,19 @@ function backendToWeightEntries(entries: BackendProgressEntry[]): WeightEntry[] 
 
 // ── Async Thunks ──────────────────────────────────────────────────────────────
 
-export const fetchProgressThunk = createAsyncThunk<WeightEntry[], void>(
+interface ProgressLoad {
+  weight: WeightEntry[];
+  waist:  number[];   // waist history (cm), oldest first — for the recomposition goal
+}
+
+export const fetchProgressThunk = createAsyncThunk<ProgressLoad, void>(
   "progress/fetch",
   async () => {
     const entries = await apiRequest<BackendProgressEntry[]>("GET", "/progress");
-    return backendToWeightEntries(entries);
+    return {
+      weight: backendToWeightEntries(entries),
+      waist:  entries.map((e) => e.waist).filter((w): w is number => w != null),
+    };
   }
 );
 
@@ -49,22 +59,52 @@ export const addWeightEntryThunk = createAsyncThunk<
   }
 );
 
+interface ActivityResponse {
+  streak:         number;
+  lastActiveDate: string;
+  bestStreak:     number;
+}
+
+// Loads the persisted commitment streak on app startup.
+export const fetchActivityThunk = createAsyncThunk<ActivityResponse, void>(
+  "progress/fetchActivity",
+  async () => apiRequest<ActivityResponse>("GET", "/progress/activity")
+);
+
+// Marks the user active today; the backend computes and returns the new streak.
+// If that activity just crossed a streak milestone, fire a celebration toast.
+export const markActiveTodayThunk = createAsyncThunk<ActivityResponse, void>(
+  "progress/markActive",
+  async (_, { getState, dispatch }) => {
+    const before = (getState() as { progress: { streak: number } }).progress.streak;
+    const res = await apiRequest<ActivityResponse>("POST", "/progress/activity");
+    if (res.streak > before && STREAK_LADDER.includes(res.streak)) {
+      dispatch(celebrate({
+        emoji:   "🔥",
+        title:   "وسام جديد!",
+        message: `${res.streak} يوم التزام متواصل — استمر!`,
+      }));
+    }
+    return res;
+  }
+);
+
 // ── State ─────────────────────────────────────────────────────────────────────
 
 interface ProgressState {
   weightData:     WeightEntry[];
+  waistData:      number[];
   streak:         number;
   lastActiveDate: string;
-}
-
-function today() {
-  return new Date().toISOString().slice(0, 10);
+  bestStreak:     number;
 }
 
 const initialState: ProgressState = {
   weightData:     [],
+  waistData:      [],
   streak:         0,
   lastActiveDate: "",
+  bestStreak:     0,
 };
 
 // ── Slice ─────────────────────────────────────────────────────────────────────
@@ -77,26 +117,6 @@ const progressSlice = createSlice({
       state.weightData.push(action.payload);
     },
 
-    setStreak(state, action: PayloadAction<number>) {
-      state.streak = action.payload;
-    },
-
-    markActiveToday(state) {
-      const t = today();
-      if (state.lastActiveDate === t) return;
-
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().slice(0, 10);
-
-      if (state.lastActiveDate === yesterdayStr) {
-        state.streak += 1;
-      } else if (state.lastActiveDate !== t) {
-        state.streak = 1;
-      }
-      state.lastActiveDate = t;
-    },
-
     resetProgress(state) {
       state.weightData     = [];
       state.streak         = 0;
@@ -106,10 +126,22 @@ const progressSlice = createSlice({
 
   extraReducers: (builder) => {
     builder.addCase(fetchProgressThunk.fulfilled, (state, action) => {
-      state.weightData = action.payload;
+      state.weightData = action.payload.weight;
+      state.waistData  = action.payload.waist;
+    });
+    // Streak comes from the server (startup load + after each activity)
+    builder.addCase(fetchActivityThunk.fulfilled, (state, action) => {
+      state.streak         = action.payload.streak;
+      state.lastActiveDate = action.payload.lastActiveDate;
+      state.bestStreak     = action.payload.bestStreak;
+    });
+    builder.addCase(markActiveTodayThunk.fulfilled, (state, action) => {
+      state.streak         = action.payload.streak;
+      state.lastActiveDate = action.payload.lastActiveDate;
+      state.bestStreak     = action.payload.bestStreak;
     });
   },
 });
 
-export const { addWeightEntry, setStreak, markActiveToday, resetProgress } = progressSlice.actions;
+export const { addWeightEntry, resetProgress } = progressSlice.actions;
 export default progressSlice.reducer;
