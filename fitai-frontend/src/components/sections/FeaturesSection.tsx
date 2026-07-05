@@ -151,6 +151,7 @@ const FEATURES = [
 export function FeaturesSection() {
   return (
     <section
+      id="how-it-works"
       className="relative overflow-hidden px-6 py-20"
       style={{ background: "#080b14", direction: "rtl", fontFamily: "Tajawal, Arial, sans-serif" }}
     >
@@ -176,27 +177,27 @@ export function FeaturesSection() {
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
         >
-          <p className="mb-3 text-xs font-bold tracking-[4px]" style={{ color: "#00E5A0", opacity: 0.8 }}>
+          <p className="mb-4 text-sm font-bold tracking-[5px]" style={{ color: "#00E5A0", opacity: 0.85 }}>
             كيف يعمل FitAI
           </p>
-          <h2 className="mb-3 text-3xl font-black leading-snug text-white">
+          <h2 className="mb-4 text-3xl font-black leading-tight text-white sm:text-4xl lg:text-5xl">
             ليس مجرد تطبيق رياضة —{" "}
             <span style={{ background: "linear-gradient(135deg,#00E5A0,#3B82F6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
               مدرّب ذكي يتابعك
             </span>
           </h2>
-          <p className="text-xs leading-relaxed" style={{ color: "#475569" }}>
+          <p className="text-base leading-relaxed" style={{ color: "#64748b" }}>
             من أول محادثة حتى هدفك النهائي
           </p>
         </motion.div>
 
         {/* 3-step cards */}
-        <div className="mb-8 grid grid-cols-3 gap-4">
+        <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
           {STEPS.map((step, i) => (
             <motion.div
               key={step.num}
               className="relative overflow-hidden rounded-xl"
-              style={{ border: `1px solid ${step.borderColor}`, minHeight: 200 }}
+              style={{ border: `1px solid ${step.borderColor}`, minHeight: 240 }}
               initial={{ opacity: 0, y: 24 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
@@ -218,11 +219,11 @@ export function FeaturesSection() {
               <div className="absolute left-1/2 top-3 -translate-x-1/2">{step.icon}</div>
               {/* Text */}
               <div className="absolute bottom-0 left-0 right-0 p-4">
-                <p className="mb-1 text-[9px] font-bold tracking-wide" style={{ color: step.color, opacity: 0.8 }}>
+                <p className="mb-1.5 text-[11px] font-bold tracking-wide" style={{ color: step.color, opacity: 0.85 }}>
                   {step.label}
                 </p>
-                <p className="mb-1 text-sm font-black text-white">{step.title}</p>
-                <p className="text-[10px] leading-relaxed" style={{ color: "#475569" }}>{step.desc}</p>
+                <p className="mb-1.5 text-lg font-black text-white">{step.title}</p>
+                <p className="text-xs leading-relaxed" style={{ color: "#64748b" }}>{step.desc}</p>
               </div>
             </motion.div>
           ))}
@@ -232,7 +233,7 @@ export function FeaturesSection() {
         <div className="mb-8 h-px" style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent)" }} />
 
         {/* 4 feature cards */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {FEATURES.map((f, i) => (
             <motion.div
               key={f.title}
@@ -258,8 +259,8 @@ export function FeaturesSection() {
               )}
               <div className="relative">
                 <div className="mb-3">{f.icon}</div>
-                <p className="mb-1.5 text-sm font-black text-white">{f.title}</p>
-                <p className="text-[10px] leading-relaxed" style={{ color: "#475569" }}>{f.desc}</p>
+                <p className="mb-2 text-lg font-black text-white">{f.title}</p>
+                <p className="text-sm leading-relaxed" style={{ color: "#64748b" }}>{f.desc}</p>
               </div>
             </motion.div>
           ))}

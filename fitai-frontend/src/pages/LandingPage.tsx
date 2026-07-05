@@ -41,7 +41,7 @@ export function LandingPage() {
         />
 
         <motion.div
-          className="relative mx-auto max-w-lg text-center"
+          className="relative mx-auto max-w-xl text-center"
           initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
@@ -49,12 +49,12 @@ export function LandingPage() {
         >
           {/* Icon */}
           <motion.div
-            className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-xl border text-xl"
+            className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border text-2xl"
             style={{ background: "rgba(0,229,160,0.08)", borderColor: "rgba(0,229,160,0.25)" }}
             animate={{
               boxShadow: [
                 "0 0 0px rgba(0,229,160,0)",
-                "0 0 20px rgba(0,229,160,0.3)",
+                "0 0 22px rgba(0,229,160,0.3)",
                 "0 0 0px rgba(0,229,160,0)",
               ],
             }}
@@ -63,7 +63,7 @@ export function LandingPage() {
             ⚡
           </motion.div>
 
-          <h2 className="mb-3 text-3xl font-black leading-snug text-white">
+          <h2 className="mb-4 text-4xl font-black leading-tight text-white sm:text-5xl">
             ابدأ رحلتك اليوم
             <br />
             <span
@@ -77,7 +77,7 @@ export function LandingPage() {
             </span>
           </h2>
 
-          <p className="mb-8 text-sm leading-relaxed" style={{ color: "#475569" }}>
+          <p className="mb-9 text-base leading-relaxed" style={{ color: "#64748b" }}>
             خطتك الأولى جاهزة في أقل من دقيقتين — ما تحتاج خبرة مسبقة
           </p>
 
@@ -85,7 +85,7 @@ export function LandingPage() {
           <motion.div whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}>
             <Link
               to="/login"
-              className="inline-block rounded-xl px-10 py-4 text-base font-black"
+              className="inline-block rounded-2xl px-12 py-5 text-lg font-black"
               style={{
                 background: "linear-gradient(135deg, #00E5A0, #00c987)",
                 color: "#0a0e1a",
@@ -96,19 +96,19 @@ export function LandingPage() {
             </Link>
           </motion.div>
 
-          <p className="mt-3 text-xs" style={{ color: "#334155" }}>
+          <p className="mt-4 text-sm" style={{ color: "#475569" }}>
             لا يوجد التزام · يمكنك الإلغاء في أي وقت
           </p>
 
           {/* Trust bar */}
           <div
-            className="mt-8 flex justify-center gap-6 border-t pt-6"
-            style={{ borderColor: "rgba(255,255,255,0.05)" }}
+            className="mt-10 flex justify-center gap-10 border-t pt-7"
+            style={{ borderColor: "rgba(255,255,255,0.06)" }}
           >
             {TRUST.map(({ val, sub, color }) => (
               <div key={sub} className="text-center">
-                <div className="text-base font-black" style={{ color }}>{val}</div>
-                <div className="mt-0.5 text-[9px]" style={{ color: "#334155" }}>{sub}</div>
+                <div className="text-2xl font-black" style={{ color }}>{val}</div>
+                <div className="mt-1 text-xs" style={{ color: "#475569" }}>{sub}</div>
               </div>
             ))}
           </div>
