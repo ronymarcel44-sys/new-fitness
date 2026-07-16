@@ -27,6 +27,7 @@ model User {
 
   // بيانات الجسم — تُملأ بعد الإعداد مع الـ AI
   age          Int?
+  gender       String?                         // NEW (Task 1): "male" | "female" — لازم لمعادلة Navy لحساب نسبة الدهون
   height       Float?                          // بالسنتيمتر
   weight       Float?                          // بالكيلوغرام
   fitnessLevel String?                         // beginner | intermediate | advanced
@@ -39,6 +40,7 @@ model User {
   hips         Float?
   arms         Float?
   legs         Float?
+  neck         Float?                          // NEW (Task 1): بالسنتيمتر — لازم لمعادلة Navy
 
   // حالة الاشتراك والحساب
   plan         String   @default("free")       // free | premium
@@ -60,6 +62,18 @@ model User {
   startHips      Float?
   startArms      Float?
   startLegs      Float?
+
+  // NEW (Task 1) — تأكيد الهدف مع الـ AI + الأهداف المحدَّدة لكل نوع هدف
+  // ملاحظة: لا يوجد حقل bodyFatPct هنا عمداً — النسبة الحالية تُحسَب دائماً من
+  // آخر ProgressEntry عبر bodyFat.ts (Task 2)، ولا تُخزَّن كقيمة مباشرة على User
+  startBodyFatPct      Float?                  // نسبة الدهون عند أول تسجيل — تُجمَّد ولا تتغيّر
+  targetBodyFatPct     Float?                  // الهدف النهائي لنسبة الدهون
+  targetLeanMass       Float?                  // كغ — لهدف muscle_gain
+  targetBenchPress     Float?                  // كغ — لهدف strength
+  targetSquat          Float?                  // كغ — لهدف strength
+  targetDeadlift       Float?                  // كغ — لهدف strength
+  targetCardioDuration Int?                    // دقائق — لهدف endurance
+  goalConfirmedByAI    Boolean @default(false) // هل تم تأكيد الهدف عبر محادثة الـ AI؟
 
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -117,6 +131,12 @@ model WorkoutExercise {
   doneAt      DateTime?                       // وقت إنجاز التمرين
   sortOrder   Int       @default(0)           // ترتيب العرض داخل اليوم
   coachEdited Boolean   @default(false)       // هل عدّل المدرب هذا التمرين؟
+
+  // NEW (Task 1) — تمييز الكارديو عن تمارين القوة + القيم الفعلية اللي المستخدم يسجّلها
+  exerciseType   String  @default("strength") // "cardio" | "strength" — القيمة الافتراضية "strength" عشان الصفوف القديمة ما تنكسر
+  durationMinutes Int?                        // الهدف المقترح من الـ AI — كارديو فقط
+  actualDuration  Int?                        // اللي المستخدم سجّله فعلياً عند وضع علامة "تم" — كارديو
+  actualWeightKg  Float?                      // اللي المستخدم سجّله فعلياً عند وضع علامة "تم" — قوة (بديل موثوق عن حقل weight النصي)
 
   // العلاقات
   plan          WorkoutPlan    @relation(fields: [planId], references: [id], onDelete: Cascade)
@@ -206,6 +226,8 @@ model ProgressEntry {
   hips      Float?
   arms      Float?
   legs      Float?
+  neck      Float?                             // NEW (Task 1)
+  bodyFatPct Float?                            // NEW (Task 1) — محسوبة عند الحفظ، تُغذّي شارت Task 7
   notes     String?
   createdAt DateTime @default(now())
 
