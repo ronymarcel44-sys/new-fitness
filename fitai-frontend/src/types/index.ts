@@ -97,6 +97,8 @@ export interface Exercise {
   muscleGroup: string;
   done: boolean;
   coachEdited?: boolean;
+  exerciseType?: "cardio" | "strength";  // NEW (Task 4)
+  durationMinutes?: number | null;       // NEW (Task 4) — cardio only, AI-prescribed target
 }
 
 export interface DayWorkout {

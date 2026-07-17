@@ -68,18 +68,20 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
   // The AI returns { "الأحد": { type, focus, exercises: [...] }, ... }
   // We store each exercise as its own row linked to the plan.
   const exerciseRows: {
-    dayOfWeek:   string;
-    dayType:     string;
-    focus:       string | null;
-    nameAr:      string;
-    nameEn:      string;
-    sets:        string;
-    reps:        string;
-    restSeconds: number;
-    weight:      string | null;
-    notes:       string | null;
-    muscleGroup: string;
-    sortOrder:   number;
+    dayOfWeek:      string;
+    dayType:        string;
+    focus:          string | null;
+    nameAr:         string;
+    nameEn:         string;
+    sets:           string;
+    reps:           string;
+    restSeconds:    number;
+    weight:         string | null;
+    notes:          string | null;
+    muscleGroup:    string;
+    sortOrder:      number;
+    exerciseType:   string;       // NEW (Task 4)
+    durationMinutes: number | null; // NEW (Task 4)
   }[] = [];
 
   for (const [day, dayData] of Object.entries(weeklyPlan) as [string, any][]) {
@@ -99,6 +101,12 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
         notes:       ex.notes           || null,
         muscleGroup: ex.muscleGroup     || "",
         sortOrder:   idx,
+        // NEW (Task 4) — falls back to "strength" if the AI omits the field
+        // (matches the schema.prisma column default, so old-style plans still work)
+        exerciseType: ex.exerciseType === "cardio" ? "cardio" : "strength",
+        durationMinutes: ex.durationMinutes != null && ex.durationMinutes !== ""
+          ? parseInt(ex.durationMinutes) || null
+          : null,
       });
     });
   }
