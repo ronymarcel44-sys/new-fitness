@@ -51,7 +51,7 @@ export const fetchProgressThunk = createAsyncThunk<ProgressLoad, void>(
 // Saves to DB — backend upserts by (userId, date) so calling twice same day updates
 export const addWeightEntryThunk = createAsyncThunk<
   void,
-  { weight: number; chest?: string; waist?: string; hips?: string; arms?: string; legs?: string }
+  { weight: number; chest?: string; waist?: string; hips?: string; arms?: string; legs?: string; neck?: string } // neck added (Task 3)
 >(
   "progress/addEntry",
   async (data) => {

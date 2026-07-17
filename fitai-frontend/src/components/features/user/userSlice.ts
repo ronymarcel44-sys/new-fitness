@@ -27,11 +27,13 @@ interface BackendProfile {
   fitnessLevel:string | null;
   goal:        string | null;
   diseases:    string | null;
+  gender:      string | null; // NEW (Task 3)
   chest:       number | null;
   waist:       number | null;
   hips:        number | null;
   arms:        number | null;
   legs:        number | null;
+  neck:        number | null; // NEW (Task 3)
   targetWeight:number | null;
   startWeight: number | null;
   startChest:  number | null;
@@ -73,11 +75,13 @@ function backendToFrontend(data: BackendProfile): Partial<UserProfile> {
     goal:              (data.goal as GoalKey | null)  ?? "",
     level:             data.fitnessLevel              ?? "",
     diseases:          data.diseases                  ?? "",
+    gender:            (data.gender as "male" | "female" | null) ?? "", // NEW (Task 3)
     chest:             data.chest?.toString()         ?? "",
     waist:             data.waist?.toString()         ?? "",
     hips:              data.hips?.toString()          ?? "",
     arms:              data.arms?.toString()          ?? "",
     legs:              data.legs?.toString()          ?? "",
+    neck:              data.neck?.toString()          ?? "", // NEW (Task 3)
     targetWeight:      data.targetWeight?.toString()  ?? "",
     startWeight:       data.startWeight?.toString()   ?? "",
     startChest:        data.startChest?.toString()    ?? "",
@@ -130,11 +134,13 @@ export const saveProfileThunk = createAsyncThunk<
         fitnessLevel:profileData.level,
         goal:        profileData.goal,
         diseases:    profileData.diseases,
+        gender:      profileData.gender, // NEW (Task 3)
         chest:       profileData.chest  ? Number(profileData.chest)  : undefined,
         waist:       profileData.waist  ? Number(profileData.waist)  : undefined,
         hips:        profileData.hips   ? Number(profileData.hips)   : undefined,
         arms:        profileData.arms   ? Number(profileData.arms)   : undefined,
         legs:        profileData.legs   ? Number(profileData.legs)   : undefined,
+        neck:        profileData.neck   ? Number(profileData.neck)   : undefined, // NEW (Task 3)
         // Pass the raw value: "75" → 75, "" → clears to null (revert to auto),
         // undefined → omitted so other saves never wipe an existing target.
         targetWeight:profileData.targetWeight,

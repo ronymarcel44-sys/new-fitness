@@ -10,8 +10,9 @@
 // server-side, so it survives a page refresh and is the single source of truth.
 
 import { Router, Request, Response } from "express";
-import { prisma }       from "../lib/prisma";
-import { authenticate } from "../middleware/auth";
+import { prisma }         from "../lib/prisma";
+import { authenticate }   from "../middleware/auth";
+import { calculateBodyFat } from "../lib/bodyFat"; // NEW (Task 3)
 
 const router = Router();
 router.use(authenticate);
@@ -32,11 +33,44 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
 // Save a new weight entry. If an entry for today already exists, update it
 // instead of creating a duplicate (the DB has a unique constraint on userId+date).
 router.post("/", async (req: Request, res: Response): Promise<void> => {
-  const { weight, chest, waist, hips, arms, legs, notes } = req.body;
+  const { weight, chest, waist, hips, arms, legs, neck, notes } = req.body; // neck added (Task 3)
 
   if (weight === undefined) {
     res.status(400).json({ error: "weight is required" });
     return;
+  }
+
+  // NEW (Task 3) — bodyFatPct needs gender + height, which live on the User
+  // row, not in this request body. Also used as a fallback source for
+  // waist/hips/neck when this particular save didn't include them (e.g. a
+  // weight-only update), so the chart doesn't lose data on partial saves.
+  const user = await prisma.user.findUnique({
+    where:  { id: req.user!.userId },
+    select: { gender: true, height: true, waist: true, hips: true, neck: true },
+  });
+
+  const waistForCalc = waist !== undefined ? (waist ? Number(waist) : null) : user?.waist ?? null;
+  const hipsForCalc  = hips  !== undefined ? (hips  ? Number(hips)  : null) : user?.hips  ?? null;
+  const neckForCalc  = neck  !== undefined ? (neck  ? Number(neck)  : null) : user?.neck  ?? null;
+
+  // Compute defensively — if gender/height/neck/waist (or hips, for females)
+  // aren't set yet, just leave bodyFatPct null. This must never block saving
+  // the rest of the measurements.
+  let bodyFatPct: number | null = null;
+  if (user && (user.gender === "male" || user.gender === "female") && user.height != null) {
+    if (waistForCalc != null && neckForCalc != null) {
+      try {
+        bodyFatPct = calculateBodyFat({
+          gender:   user.gender,
+          heightCm: user.height,
+          waistCm:  waistForCalc,
+          neckCm:   neckForCalc,
+          hipsCm:   hipsForCalc ?? undefined,
+        });
+      } catch {
+        bodyFatPct = null; // e.g. female without hips recorded yet
+      }
+    }
   }
 
   const todayStart = new Date();
@@ -57,6 +91,8 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
       ...(hips  !== undefined && { hips:  hips  ? Number(hips)  : null }),
       ...(arms  !== undefined && { arms:  arms  ? Number(arms)  : null }),
       ...(legs  !== undefined && { legs:  legs  ? Number(legs)  : null }),
+      ...(neck  !== undefined && { neck:  neck  ? Number(neck)  : null }), // NEW (Task 3)
+      bodyFatPct,                                                          // NEW (Task 3)
       ...(notes !== undefined && { notes }),
     },
     create: {
@@ -68,6 +104,8 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
       hips:      hips  ? Number(hips)  : null,
       arms:      arms  ? Number(arms)  : null,
       legs:      legs  ? Number(legs)  : null,
+      neck:      neck  ? Number(neck)  : null, // NEW (Task 3)
+      bodyFatPct,                              // NEW (Task 3)
       notes:     notes || null,
     },
   });

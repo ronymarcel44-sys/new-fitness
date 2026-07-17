@@ -17,11 +17,13 @@ export interface UserProfile {
   goal: GoalKey | "";
   level: string;
   diseases: string;
+  gender?: "male" | "female" | "";   // NEW (Task 3) — required for the Navy body-fat formula
   chest?: string;
   waist?: string;
   hips?: string;
   arms?: string;
   legs?: string;
+  neck?: string;                     // NEW (Task 3) — cm, alongside the other measurements
   targetWeight?: string;   // الوزن المستهدف — فارغ = هدف تلقائي
   // قيم البداية المجمّدة (للتقدّم منذ البداية) — يديرها الباك-إند
   startWeight?: string;

@@ -43,11 +43,13 @@ router.get("/me", async (req: Request, res: Response): Promise<void> => {
       fitnessLevel:true,
       goal:        true,
       diseases:    true,
+      gender:      true,   // NEW (Task 3)
       chest:       true,
       waist:       true,
       hips:        true,
       arms:        true,
       legs:        true,
+      neck:        true,   // NEW (Task 3)
       targetWeight:true,
       startWeight: true,
       startChest:  true,
@@ -77,7 +79,9 @@ router.put("/me", async (req: Request, res: Response): Promise<void> => {
   const {
     name, age, height, weight,
     fitnessLevel, goal, diseases,
+    gender,                          // NEW (Task 3)
     chest, waist, hips, arms, legs,
+    neck,                            // NEW (Task 3)
     targetWeight,
     hasSetup,
   } = req.body;
@@ -125,11 +129,13 @@ router.put("/me", async (req: Request, res: Response): Promise<void> => {
       ...(fitnessLevel !== undefined && { fitnessLevel }),
       ...(goal         !== undefined && { goal }),
       ...(diseases     !== undefined && { diseases }),
+      ...(gender       !== undefined && { gender }),                                    // NEW (Task 3)
       ...(chest        !== undefined && { chest:        chest ? Number(chest) : null }),
       ...(waist        !== undefined && { waist:        waist ? Number(waist) : null }),
       ...(hips         !== undefined && { hips:         hips  ? Number(hips)  : null }),
       ...(arms         !== undefined && { arms:         arms  ? Number(arms)  : null }),
       ...(legs         !== undefined && { legs:         legs  ? Number(legs)  : null }),
+      ...(neck         !== undefined && { neck:         neck  ? Number(neck)  : null }), // NEW (Task 3)
       ...(targetWeight !== undefined && { targetWeight: targetWeight ? Number(targetWeight) : null }),
       ...(hasSetup     !== undefined && { hasSetup:     Boolean(hasSetup) }),
       // Freeze baselines the first time each metric is recorded (see freeze())
@@ -153,11 +159,13 @@ router.put("/me", async (req: Request, res: Response): Promise<void> => {
       fitnessLevel:true,
       goal:        true,
       diseases:    true,
+      gender:      true,   // NEW (Task 3)
       chest:       true,
       waist:       true,
       hips:        true,
       arms:        true,
       legs:        true,
+      neck:        true,   // NEW (Task 3)
       targetWeight:true,
       startWeight: true,
       startChest:  true,

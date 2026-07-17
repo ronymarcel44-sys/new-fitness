@@ -12,6 +12,6 @@
     "resolveJsonModule":          true,
     "sourceMap":                  true
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "scratch-test-bodyfat.ts"],
   "exclude": ["node_modules", "dist"]
 }

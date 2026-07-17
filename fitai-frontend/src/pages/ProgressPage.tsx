@@ -35,6 +35,7 @@ const FIELDS = [
   { key: "hips",   label: "الأرداف",  unit: "سم", emoji: "🍑" },
   { key: "arms",   label: "الذراعين", unit: "سم", emoji: "💪" },
   { key: "legs",   label: "الأرجل",   unit: "سم", emoji: "🦵" },
+  { key: "neck",   label: "الرقبة",   unit: "سم", emoji: "🧣" }, // NEW (Task 3)
 ] as const;
 
 export function ProgressPage() {
@@ -50,8 +51,15 @@ export function ProgressPage() {
     hips:   profile.hips   || "",
     arms:   profile.arms   || "",
     legs:   profile.legs   || "",
+    neck:   profile.neck   || "", // NEW (Task 3)
   });
-  const [saved, setSaved] = useState(false);
+  // "redirect" = numeric changes were saved and we're navigating to chat;
+  // "silent" = e.g. gender-only save, nothing to tell the AI, stay on the page
+  const [saved, setSaved] = useState<false | "redirect" | "silent">(false); // NEW (Task 3) — was boolean
+  // NEW (Task 3) — one-time gender select. Only rendered while profile.gender
+  // is empty; once saved, the field disappears here and shows read-only in the
+  // profile card below instead — see design discussion.
+  const [genderForm, setGenderForm] = useState<"male" | "female" | "">("");
 
   // Keep the form in sync with the profile as it loads/changes. The profile is
   // fetched asynchronously on app start, so without this the inputs would stay
@@ -64,8 +72,9 @@ export function ProgressPage() {
       hips:   profile.hips   || "",
       arms:   profile.arms   || "",
       legs:   profile.legs   || "",
+      neck:   profile.neck   || "", // NEW (Task 3)
     });
-  }, [profile.weight, profile.chest, profile.waist, profile.hips, profile.arms, profile.legs]);
+  }, [profile.weight, profile.chest, profile.waist, profile.hips, profile.arms, profile.legs, profile.neck]);
 
   const handleSaveAndNotify = async () => {
     const changes: string[] = [];
@@ -78,7 +87,11 @@ export function ProgressPage() {
       }
     });
 
-    if (changes.length === 0) return;
+    // NEW (Task 3) — gender is set once via the selector below (not part of
+    // FIELDS/changes tracking, since it's not a re-entered numeric measurement)
+    const genderChanged = genderForm !== "" && genderForm !== profile.gender;
+
+    if (changes.length === 0 && !genderChanged) return;
 
     // Build the updated profile object (falls back to existing values per field)
     const updatedProfile = {
@@ -88,6 +101,8 @@ export function ProgressPage() {
       hips:   form.hips   || profile.hips,
       arms:   form.arms   || profile.arms,
       legs:   form.legs   || profile.legs,
+      neck:   form.neck   || profile.neck,     // NEW (Task 3)
+      gender: genderForm  || profile.gender,   // NEW (Task 3)
     };
 
     // 1. Save current measurements to the user profile (User table) for instant
@@ -107,6 +122,7 @@ export function ProgressPage() {
         hips:   updatedProfile.hips,
         arms:   updatedProfile.arms,
         legs:   updatedProfile.legs,
+        neck:   updatedProfile.neck, // NEW (Task 3)
       }));
       dispatch(fetchProgressThunk());   // rebuild the chart from the DB
 
@@ -133,13 +149,21 @@ export function ProgressPage() {
     }
 
     // 3. Tell the AI about the changes so it can suggest plan tweaks.
-    const autoMsg = `[تحديث القياسات]\nقمت بتحديث قياساتي:\n${changes.join("\n")}\n\nهل تحتاج خطتي لأي تعديلات بناءً على هذه التغييرات؟`;
-    dispatch(addMessage({ role: "user", text: autoMsg }));
+    // NEW (Task 3) — only when there were actual measurement changes; a
+    // gender-only save has nothing for the AI to react to, so skip the
+    // message and the redirect to chat.
+    if (changes.length > 0) {
+      const autoMsg = `[تحديث القياسات]\nقمت بتحديث قياساتي:\n${changes.join("\n")}\n\nهل تحتاج خطتي لأي تعديلات بناءً على هذه التغييرات؟`;
+      dispatch(addMessage({ role: "user", text: autoMsg }));
 
-    setSaved(true);
-    setTimeout(() => {
-      navigate("/chat");
-    }, 1500);
+      setSaved("redirect");
+      setTimeout(() => {
+        navigate("/chat");
+      }, 1500);
+    } else {
+      setSaved("silent");
+      setTimeout(() => setSaved(false), 1500);
+    }
   };
 
   if (!profile.hasCompletedSetup) {
@@ -221,6 +245,25 @@ export function ProgressPage() {
               <h3 className="font-bold">تحديث قياساتك</h3>
             </div>
 
+            {/* NEW (Task 3) — one-time gender select, needed for the body-fat
+                formula. Disappears once saved; shown read-only below instead. */}
+            {!profile.gender && (
+              <div className="mb-5">
+                <label className="mb-1.5 block text-xs text-slate-400">
+                  ⚧ الجنس <span className="text-slate-600">(مطلوب لحساب نسبة الدهون)</span>
+                </label>
+                <select
+                  value={genderForm}
+                  onChange={(e) => setGenderForm(e.target.value as "male" | "female" | "")}
+                  className="input-base w-full sm:w-1/3"
+                >
+                  <option value="">اختر...</option>
+                  <option value="male">ذكر</option>
+                  <option value="female">أنثى</option>
+                </select>
+              </div>
+            )}
+
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {FIELDS.map(({ key, label, unit, emoji }) => {
                 const change = getChange(key);
@@ -250,7 +293,7 @@ export function ProgressPage() {
             <div className="mt-5">
               {saved ? (
                 <div className="flex items-center justify-center gap-2 rounded-xl border border-accent/30 bg-accent/10 py-3 text-sm font-semibold text-accent">
-                  ✅ تم الحفظ! جاري الانتقال للمساعد...
+                  {saved === "redirect" ? "✅ تم الحفظ! جاري الانتقال للمساعد..." : "✅ تم الحفظ!"}
                 </div>
               ) : (
                 <button onClick={handleSaveAndNotify} className="btn-primary w-full text-center glow">
@@ -277,6 +320,7 @@ export function ProgressPage() {
                 { label: "الاسم",    val: profile.name },
                 { label: "العمر",    val: profile.age    ? `${profile.age} سنة`   : "—" },
                 { label: "الطول",    val: profile.height ? `${profile.height} سم` : "—" },
+                { label: "الجنس",    val: profile.gender === "male" ? "ذكر" : profile.gender === "female" ? "أنثى" : "—" }, // NEW (Task 3)
                 { label: "الهدف",    val: getGoalLabel(profile.goal) },
                 { label: "المستوى", val: profile.level  },
                 { label: "الأمراض", val: profile.diseases || "لا يوجد" },
