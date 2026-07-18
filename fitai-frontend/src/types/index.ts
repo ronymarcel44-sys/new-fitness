@@ -25,6 +25,16 @@ export interface UserProfile {
   legs?: string;
   neck?: string;                     // NEW (Task 3) — cm, alongside the other measurements
   targetWeight?: string;   // الوزن المستهدف — فارغ = هدف تلقائي
+  // NEW (Task 5) — confirmed goal targets from the AI onboarding flow (Task 4).
+  // Only the field(s) relevant to the user's goal type are ever populated —
+  // see confirmedGoal in ai.routes.ts for which fields map to which goal.
+  targetBodyFatPct?: string;
+  targetLeanMass?: string;
+  targetBenchPress?: string;
+  targetSquat?: string;
+  targetDeadlift?: string;
+  targetCardioDuration?: string;
+  goalConfirmedByAI?: boolean;
   // قيم البداية المجمّدة (للتقدّم منذ البداية) — يديرها الباك-إند
   startWeight?: string;
   startChest?: string;

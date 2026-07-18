@@ -51,6 +51,14 @@ router.get("/me", async (req: Request, res: Response): Promise<void> => {
       legs:        true,
       neck:        true,   // NEW (Task 3)
       targetWeight:true,
+      // NEW (Task 5) — confirmed goal targets from the AI onboarding flow
+      targetBodyFatPct:     true,
+      targetLeanMass:       true,
+      targetBenchPress:     true,
+      targetSquat:          true,
+      targetDeadlift:       true,
+      targetCardioDuration: true,
+      goalConfirmedByAI:    true,
       startWeight: true,
       startChest:  true,
       startWaist:  true,
@@ -83,6 +91,9 @@ router.put("/me", async (req: Request, res: Response): Promise<void> => {
     chest, waist, hips, arms, legs,
     neck,                            // NEW (Task 3)
     targetWeight,
+    // NEW (Task 5) — confirmed goal targets from the AI onboarding flow
+    targetBodyFatPct, targetLeanMass, targetBenchPress, targetSquat, targetDeadlift, targetCardioDuration,
+    goalConfirmedByAI,
     hasSetup,
   } = req.body;
 
@@ -137,6 +148,16 @@ router.put("/me", async (req: Request, res: Response): Promise<void> => {
       ...(legs         !== undefined && { legs:         legs  ? Number(legs)  : null }),
       ...(neck         !== undefined && { neck:         neck  ? Number(neck)  : null }), // NEW (Task 3)
       ...(targetWeight !== undefined && { targetWeight: targetWeight ? Number(targetWeight) : null }),
+      // NEW (Task 5) — each is only ever sent by ChatPage when the AI's
+      // confirmedGoal block actually included it, so a plain Number() is safe
+      // (no "clear to null" use case here, unlike targetWeight).
+      ...(targetBodyFatPct     !== undefined && { targetBodyFatPct:     Number(targetBodyFatPct) }),
+      ...(targetLeanMass       !== undefined && { targetLeanMass:       Number(targetLeanMass) }),
+      ...(targetBenchPress     !== undefined && { targetBenchPress:     Number(targetBenchPress) }),
+      ...(targetSquat          !== undefined && { targetSquat:          Number(targetSquat) }),
+      ...(targetDeadlift       !== undefined && { targetDeadlift:       Number(targetDeadlift) }),
+      ...(targetCardioDuration !== undefined && { targetCardioDuration: Number(targetCardioDuration) }),
+      ...(goalConfirmedByAI    !== undefined && { goalConfirmedByAI:    Boolean(goalConfirmedByAI) }),
       ...(hasSetup     !== undefined && { hasSetup:     Boolean(hasSetup) }),
       // Freeze baselines the first time each metric is recorded (see freeze())
       ...(sWeight !== undefined && { startWeight: sWeight }),
@@ -167,6 +188,14 @@ router.put("/me", async (req: Request, res: Response): Promise<void> => {
       legs:        true,
       neck:        true,   // NEW (Task 3)
       targetWeight:true,
+      // NEW (Task 5)
+      targetBodyFatPct:     true,
+      targetLeanMass:       true,
+      targetBenchPress:     true,
+      targetSquat:          true,
+      targetDeadlift:       true,
+      targetCardioDuration: true,
+      goalConfirmedByAI:    true,
       startWeight: true,
       startChest:  true,
       startWaist:  true,

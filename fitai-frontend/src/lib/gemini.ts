@@ -21,6 +21,12 @@ export function parsePlanFromText(text: string): {
   profile?:   Partial<UserProfile>;
   workout?:   WorkoutPlan;
   nutrition?: NutritionPlan;
+  // NEW (Task 5) — the goal-specific target(s) the user confirmed in chat (Task 4).
+  // Only the field(s) relevant to their goal type are non-null; the rest are null.
+  confirmedGoal?: Partial<Record<
+    "targetBodyFatPct" | "targetLeanMass" | "targetBenchPress" | "targetSquat" | "targetDeadlift" | "targetCardioDuration",
+    number | null
+  >>;
 } | null {
   try {
     const match = text.match(/```json\s*([\s\S]*?)\s*```/);
@@ -32,9 +38,10 @@ export function parsePlanFromText(text: string): {
       : parsed.workout;
 
     return {
-      profile:   parsed.profile,
+      profile:       parsed.profile,
       workout,
-      nutrition: parsed.nutrition,
+      nutrition:     parsed.nutrition,
+      confirmedGoal: parsed.confirmedGoal, // NEW (Task 5)
     };
   } catch { return null; }
 }

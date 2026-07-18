@@ -35,6 +35,14 @@ interface BackendProfile {
   legs:        number | null;
   neck:        number | null; // NEW (Task 3)
   targetWeight:number | null;
+  // NEW (Task 5)
+  targetBodyFatPct:     number | null;
+  targetLeanMass:       number | null;
+  targetBenchPress:     number | null;
+  targetSquat:          number | null;
+  targetDeadlift:       number | null;
+  targetCardioDuration: number | null;
+  goalConfirmedByAI:    boolean;
   startWeight: number | null;
   startChest:  number | null;
   startWaist:  number | null;
@@ -83,6 +91,14 @@ function backendToFrontend(data: BackendProfile): Partial<UserProfile> {
     legs:              data.legs?.toString()          ?? "",
     neck:              data.neck?.toString()          ?? "", // NEW (Task 3)
     targetWeight:      data.targetWeight?.toString()  ?? "",
+    // NEW (Task 5)
+    targetBodyFatPct:     data.targetBodyFatPct?.toString()     ?? "",
+    targetLeanMass:       data.targetLeanMass?.toString()       ?? "",
+    targetBenchPress:     data.targetBenchPress?.toString()     ?? "",
+    targetSquat:          data.targetSquat?.toString()          ?? "",
+    targetDeadlift:       data.targetDeadlift?.toString()       ?? "",
+    targetCardioDuration: data.targetCardioDuration?.toString() ?? "",
+    goalConfirmedByAI:    data.goalConfirmedByAI ?? false,
     startWeight:       data.startWeight?.toString()   ?? "",
     startChest:        data.startChest?.toString()    ?? "",
     startWaist:        data.startWaist?.toString()    ?? "",
@@ -114,6 +130,19 @@ export const fetchProfileThunk = createAsyncThunk<
   }
 );
 
+// Coerce a possibly messy numeric string (e.g. the AI writing "95 سم" instead
+// of "95", despite being told not to) into a clean number, or undefined if
+// it's empty/not actually numeric. Without this, Number("95 سم") -> NaN ->
+// JSON.stringify(NaN) -> null -> silently WIPES the field in the DB instead
+// of just failing loudly. This was the root cause of measurements not saving.
+function numOrUndefined(v: string | undefined): number | undefined {
+  if (!v) return undefined;
+  const cleaned = String(v).replace(/[^\d.]/g, "");
+  if (!cleaned) return undefined;
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : undefined;
+}
+
 // Save profile to DB — called after the AI generates a plan in ChatPage.
 // ChatPage still calls setProfile (sync) for instant UI update,
 // then dispatches saveProfileThunk to persist it to the backend.
@@ -128,22 +157,32 @@ export const saveProfileThunk = createAsyncThunk<
       // Convert frontend string values to the numbers the backend expects
       const body = {
         name:        profileData.name,
-        age:         profileData.age    ? Number(profileData.age)    : undefined,
-        weight:      profileData.weight ? Number(profileData.weight) : undefined,
-        height:      profileData.height ? Number(profileData.height) : undefined,
+        age:         numOrUndefined(profileData.age),
+        weight:      numOrUndefined(profileData.weight),
+        height:      numOrUndefined(profileData.height),
         fitnessLevel:profileData.level,
         goal:        profileData.goal,
         diseases:    profileData.diseases,
         gender:      profileData.gender, // NEW (Task 3)
-        chest:       profileData.chest  ? Number(profileData.chest)  : undefined,
-        waist:       profileData.waist  ? Number(profileData.waist)  : undefined,
-        hips:        profileData.hips   ? Number(profileData.hips)   : undefined,
-        arms:        profileData.arms   ? Number(profileData.arms)   : undefined,
-        legs:        profileData.legs   ? Number(profileData.legs)   : undefined,
-        neck:        profileData.neck   ? Number(profileData.neck)   : undefined, // NEW (Task 3)
+        chest:       numOrUndefined(profileData.chest),
+        waist:       numOrUndefined(profileData.waist),
+        hips:        numOrUndefined(profileData.hips),
+        arms:        numOrUndefined(profileData.arms),
+        legs:        numOrUndefined(profileData.legs),
+        neck:        numOrUndefined(profileData.neck), // NEW (Task 3)
         // Pass the raw value: "75" → 75, "" → clears to null (revert to auto),
         // undefined → omitted so other saves never wipe an existing target.
         targetWeight:profileData.targetWeight,
+        // NEW (Task 5) — ChatPage only ever includes these when the AI's
+        // confirmedGoal block set them, so a plain truthy-check + Number() is
+        // enough (no "clear to null" use case here, unlike targetWeight).
+        targetBodyFatPct:     numOrUndefined(profileData.targetBodyFatPct),
+        targetLeanMass:       numOrUndefined(profileData.targetLeanMass),
+        targetBenchPress:     numOrUndefined(profileData.targetBenchPress),
+        targetSquat:          numOrUndefined(profileData.targetSquat),
+        targetDeadlift:       numOrUndefined(profileData.targetDeadlift),
+        targetCardioDuration: numOrUndefined(profileData.targetCardioDuration),
+        goalConfirmedByAI:    profileData.goalConfirmedByAI,
         hasSetup:    profileData.hasCompletedSetup,
       };
       const data = await apiRequest<BackendProfile>("PUT", "/users/me", body);

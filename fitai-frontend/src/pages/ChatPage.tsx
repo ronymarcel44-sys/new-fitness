@@ -139,7 +139,27 @@ export function ChatPage() {
         Object.entries(parsed.profile).filter(([, v]) => v !== "" && v != null)
       ) as Partial<typeof parsed.profile>;
 
-      const profileData = { ...cleanedProfile, hasCompletedSetup: true };
+      // NEW (Task 5) — pull the goal-specific target(s) out of confirmedGoal
+      // (only the ones relevant to this user's goal are non-null; the rest come
+      // back null from the AI and are dropped here so they never overwrite
+      // anything). Values arrive as numbers but UserProfile stores them as
+      // strings, matching every other numeric field on the profile.
+      const confirmedTargets = parsed.confirmedGoal
+        ? Object.fromEntries(
+            Object.entries(parsed.confirmedGoal)
+              .filter(([, v]) => v !== null && v !== undefined)
+              .map(([k, v]) => [k, String(v)])
+          )
+        : {};
+
+      const profileData = {
+        ...cleanedProfile,
+        ...confirmedTargets,
+        hasCompletedSetup: true,
+        // Only flip this on when the AI actually sent a confirmedGoal block —
+        // never send `false` here, so a later unrelated save can't un-confirm it.
+        ...(parsed.confirmedGoal ? { goalConfirmedByAI: true } : {}),
+      };
       dispatch(setProfile(profileData));
       dispatch(completeSetup());
       dispatch(saveProfileThunk(profileData));
