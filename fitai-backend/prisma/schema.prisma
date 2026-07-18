@@ -67,13 +67,25 @@ model User {
   // ملاحظة: لا يوجد حقل bodyFatPct هنا عمداً — النسبة الحالية تُحسَب دائماً من
   // آخر ProgressEntry عبر bodyFat.ts (Task 2)، ولا تُخزَّن كقيمة مباشرة على User
   startBodyFatPct      Float?                  // نسبة الدهون عند أول تسجيل — تُجمَّد ولا تتغيّر
-  targetBodyFatPct     Float?                  // الهدف النهائي لنسبة الدهون
-  targetLeanMass       Float?                  // كغ — لهدف muscle_gain
-  targetBenchPress     Float?                  // كغ — لهدف strength
-  targetSquat          Float?                  // كغ — لهدف strength
-  targetDeadlift       Float?                  // كغ — لهدف strength
-  targetCardioDuration Int?                    // دقائق — لهدف endurance
+  // Mini goal — near-term motivational checkpoint (3-4 months), confirmed via
+  // the AI's safer/ambitious negotiation in the chat onboarding flow
+  targetBodyFatPct     Float?                  // نسبة الدهون - خطوة قريبة
+  targetLeanMass       Float?                  // كغ — لهدف muscle_gain (خطوة قريبة)
+  targetBenchPress     Float?                  // كغ — لهدف strength (خطوة قريبة)
+  targetSquat          Float?                  // كغ — لهدف strength (خطوة قريبة)
+  targetDeadlift       Float?                  // كغ — لهدف strength (خطوة قريبة)
+  targetCardioDuration Int?                    // دقائق — لهدف endurance (خطوة قريبة)
   goalConfirmedByAI    Boolean @default(false) // هل تم تأكيد الهدف عبر محادثة الـ AI؟
+
+  // Main goal — long-distance destination (NEW), also confirmed via the AI's
+  // safer/ambitious negotiation, but for the ultimate target, not the near-term
+  // step. Only the field(s) relevant to the user's goal type are ever set.
+  mainTargetWeight         Float? // كغ — الوزن المثالي المستهدف، لهدف muscle_gain
+  mainTargetBodyFatPct     Float? // نسبة الدهون النهائية، لهدف fat_loss/toning/body_recomposition
+  mainTargetBenchPress     Float? // كغ — لهدف strength
+  mainTargetSquat          Float? // كغ — لهدف strength
+  mainTargetDeadlift       Float? // كغ — لهدف strength
+  mainTargetCardioDuration Int?   // دقائق — لهدف endurance
 
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
