@@ -30,6 +30,14 @@ interface BackendExercise {
   sortOrder:   number;
   done:        boolean;
   coachEdited: boolean;
+  // NEW (Task 4 fix) — the backend already returns these (Prisma `include`
+  // with no `select` returns every column), this interface just never
+  // declared them, so they were silently dropped on every page refresh.
+  exerciseType:    string;
+  durationMinutes: number | null;
+  // NEW (Task 6)
+  actualWeightKg:  number | null;
+  actualDuration:  number | null;
 }
 
 interface BackendPlan {
@@ -75,6 +83,11 @@ function backendToWeeklyPlan(plan: BackendPlan): WeeklyPlan {
       muscleGroup: ex.muscleGroup,
       done:        ex.done,
       coachEdited: ex.coachEdited,
+      // NEW (Task 4 fix / Task 6)
+      exerciseType:    ex.exerciseType === "cardio" ? "cardio" : "strength",
+      durationMinutes: ex.durationMinutes,
+      actualWeightKg:  ex.actualWeightKg,
+      actualDuration:  ex.actualDuration,
     };
 
     weekly[day].exercises.push(exercise);
@@ -127,13 +140,13 @@ export const saveWorkoutThunk = createAsyncThunk<
 // also survives page refresh
 export const toggleDoneThunk = createAsyncThunk<
   void,
-  { exerciseId: string; done: boolean },
+  { exerciseId: string; done: boolean; actualWeightKg?: number; actualDuration?: number }, // extended (Task 6)
   { rejectValue: string }
 >(
   "workout/toggleDone",
-  async ({ exerciseId, done }, { rejectWithValue }) => {
+  async ({ exerciseId, actualWeightKg, actualDuration }, { rejectWithValue }) => {
     try {
-      await apiRequest("PATCH", `/workout/exercises/${exerciseId}/done`, { done });
+      await apiRequest("PATCH", `/workout/exercises/${exerciseId}/done`, { actualWeightKg, actualDuration });
     } catch (err) {
       console.error("Failed to toggle exercise done:", err);
       return rejectWithValue(err instanceof Error ? err.message : "Failed to update exercise");
@@ -213,12 +226,18 @@ const workoutSlice = createSlice({
     },
 
     // Toggle done locally — UI updates instantly without waiting for the DB.
-    // Dispatch toggleDoneThunk alongside this to persist the change.
-    toggleDone(state, action: PayloadAction<{ day: DayName; exerciseId: string }>) {
+    // NEW (Task 6) — optional actualWeightKg/actualDuration, written alongside
+    // the done flip so the UI reflects the logged value instantly (matches
+    // what the backend PATCH now stores). Dispatch toggleDoneThunk alongside
+    // this to persist the change.
+    toggleDone(state, action: PayloadAction<{ day: DayName; exerciseId: string; actualWeightKg?: number; actualDuration?: number }>) {
       const day = state.weeklyPlan?.[action.payload.day];
       if (!day) return;
       const ex = day.exercises.find((e) => e.id === action.payload.exerciseId);
-      if (ex) ex.done = !ex.done;
+      if (!ex) return;
+      ex.done = !ex.done;
+      if (action.payload.actualWeightKg !== undefined) ex.actualWeightKg = action.payload.actualWeightKg;
+      if (action.payload.actualDuration !== undefined) ex.actualDuration = action.payload.actualDuration;
     },
 
     saveSetWeight(state, action: PayloadAction<{ exerciseId: string; setIdx: number; weight: string }>) {

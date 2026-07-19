@@ -71,6 +71,24 @@ export const fetchActivityThunk = createAsyncThunk<ActivityResponse, void>(
   async () => apiRequest<ActivityResponse>("GET", "/progress/activity")
 );
 
+// ── Goal summary (Task 6) — real progress vs the confirmed main+mini targets ──
+// Mirrors fitai-backend/src/lib/progressReader.ts's GoalProgress/GoalMetric shape.
+// "journey" metrics (body fat %, weight, lean mass) have a real start point and
+// get run through goalTracker.ts's computeJourney/computeMilestones on render.
+// "ratio" (endurance) and "lifts" (strength) have no start — just current vs target.
+export interface JourneyMetric { kind: "journey"; unit: string; direction: "up" | "down"; start: number; current: number; target: number; }
+export interface RatioMetric   { kind: "ratio";   unit: string; current: number; target: number; }
+export interface LiftsMetric   { kind: "lifts";   unit: string; lifts: { label: string; current: number; target: number }[]; }
+export type GoalMetric = JourneyMetric | RatioMetric | LiftsMetric;
+export interface GoalSummary { goal: string; main: GoalMetric | null; mini: GoalMetric | null; }
+
+// Returns null when the user hasn't been through the AI goal-confirmation flow —
+// GoalJourneyCard falls back to the old weight/waist card in that case.
+export const fetchGoalSummaryThunk = createAsyncThunk<GoalSummary | null, void>(
+  "progress/fetchGoalSummary",
+  async () => apiRequest<GoalSummary | null>("GET", "/progress/goal-summary")
+);
+
 // Marks the user active today; the backend computes and returns the new streak.
 // If that activity just crossed a streak milestone, fire a celebration toast.
 export const markActiveTodayThunk = createAsyncThunk<ActivityResponse, void>(
@@ -97,6 +115,7 @@ interface ProgressState {
   streak:         number;
   lastActiveDate: string;
   bestStreak:     number;
+  goalSummary:    GoalSummary | null; // NEW (Task 6)
 }
 
 const initialState: ProgressState = {
@@ -105,6 +124,7 @@ const initialState: ProgressState = {
   streak:         0,
   lastActiveDate: "",
   bestStreak:     0,
+  goalSummary:    null, // NEW (Task 6)
 };
 
 // ── Slice ─────────────────────────────────────────────────────────────────────
@@ -139,6 +159,10 @@ const progressSlice = createSlice({
       state.streak         = action.payload.streak;
       state.lastActiveDate = action.payload.lastActiveDate;
       state.bestStreak     = action.payload.bestStreak;
+    });
+    // NEW (Task 6)
+    builder.addCase(fetchGoalSummaryThunk.fulfilled, (state, action) => {
+      state.goalSummary = action.payload;
     });
   },
 });

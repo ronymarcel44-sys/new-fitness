@@ -21,10 +21,12 @@ export function parsePlanFromText(text: string): {
   profile?:   Partial<UserProfile>;
   workout?:   WorkoutPlan;
   nutrition?: NutritionPlan;
-  // NEW (Task 5) — the goal-specific target(s) the user confirmed in chat (Task 4).
+  // NEW (Task 5/6-prep) — the goal-specific target(s) the user confirmed in chat
+  // (Task 4). Mini = near-term checkpoint, main = long-distance destination.
   // Only the field(s) relevant to their goal type are non-null; the rest are null.
   confirmedGoal?: Partial<Record<
-    "targetBodyFatPct" | "targetLeanMass" | "targetBenchPress" | "targetSquat" | "targetDeadlift" | "targetCardioDuration",
+    | "targetBodyFatPct" | "targetLeanMass" | "targetBenchPress" | "targetSquat" | "targetDeadlift" | "targetCardioDuration"
+    | "mainTargetWeight" | "mainTargetBodyFatPct" | "mainTargetBenchPress" | "mainTargetSquat" | "mainTargetDeadlift" | "mainTargetCardioDuration",
     number | null
   >>;
 } | null {

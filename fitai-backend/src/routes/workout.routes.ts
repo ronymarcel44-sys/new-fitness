@@ -129,8 +129,17 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
 // ── PATCH /workout/exercises/:id/done ─────────────────────────────────────────
 // Toggles the done state of a single exercise.
 // Called every time the user taps an exercise checkbox in the UI.
+// NEW (Task 6) — marking a strength/cardio exercise DONE now requires the real
+// value used (actualWeightKg / actualDuration) in the body, so progress
+// tracking (progressReader.ts) has real data to read. Un-checking doesn't
+// clear the last logged value — it stays as the PR record.
 router.patch("/exercises/:id/done", async (req: Request, res: Response): Promise<void> => {
-  const { id }   = req.params;
+  const { id } = req.params;
+  const { actualWeightKg, actualDuration } = req.body as {
+    actualWeightKg?: number;
+    actualDuration?: number;
+  };
+
   // Verify the exercise belongs to this user before updating it
   const exercise = await prisma.workoutExercise.findFirst({
     where: { id, plan: { userId: req.user!.userId } },
@@ -141,11 +150,30 @@ router.patch("/exercises/:id/done", async (req: Request, res: Response): Promise
     return;
   }
 
+  const willBeDone = !exercise.done;
+
+  if (willBeDone && exercise.exerciseType === "strength") {
+    const w = Number(actualWeightKg);
+    if (!Number.isFinite(w) || w <= 0) {
+      res.status(400).json({ error: "actualWeightKg is required to mark a strength exercise done" });
+      return;
+    }
+  }
+  if (willBeDone && exercise.exerciseType === "cardio") {
+    const d = Number(actualDuration);
+    if (!Number.isFinite(d) || d <= 0) {
+      res.status(400).json({ error: "actualDuration is required to mark a cardio exercise done" });
+      return;
+    }
+  }
+
   const updated = await prisma.workoutExercise.update({
     where: { id },
     data: {
-      done:   !exercise.done,
-      doneAt: !exercise.done ? new Date() : null,
+      done:   willBeDone,
+      doneAt: willBeDone ? new Date() : null,
+      ...(willBeDone && exercise.exerciseType === "strength" && { actualWeightKg: Number(actualWeightKg) }),
+      ...(willBeDone && exercise.exerciseType === "cardio"   && { actualDuration: Number(actualDuration) }),
     },
   });
 

@@ -18,17 +18,26 @@ import {
   isWeightGoal, isWaistGoal, isConsistencyGoal, consistencyFlavor,
   resolveMetricJourney, motivationMessage,
 } from "@/lib/goalTracker";
+import { ConfirmedGoalCard } from "./ConfirmedGoalCard"; // NEW (Task 6)
 
 const CONSISTENCY_GOALS = ["strength", "endurance", "general_fitness"];
 
 export function GoalJourneyCard() {
   const dispatch = useAppDispatch();
-  const { profile }                       = useAppSelector((s) => s.user);
-  const { weightData, waistData, streak } = useAppSelector((s) => s.progress);
+  const { profile }                                  = useAppSelector((s) => s.user);
+  const { weightData, waistData, streak, goalSummary } = useAppSelector((s) => s.progress);
 
   const goal = profile.goal;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft]     = useState("");
+
+  // NEW (Task 6) — users who've been through the AI goal-confirmation flow get
+  // the new main+mini card instead of the old weight/waist one. Pre-existing
+  // users (goalConfirmedByAI still false) fall through to the unchanged code
+  // below, so nothing breaks for anyone who hasn't done the new onboarding.
+  if (profile.goalConfirmedByAI && goalSummary) {
+    return <ConfirmedGoalCard goal={goal} summary={goalSummary} streak={streak} />;
+  }
 
   // ── Consistency goals: the streak card above is their journey; show a flavor card.
   if (isConsistencyGoal(goal)) {

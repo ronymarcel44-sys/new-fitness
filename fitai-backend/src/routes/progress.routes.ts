@@ -1,10 +1,11 @@
 // fitai-backend/src/routes/progress.routes.ts
 //
 // Endpoints:
-//   GET  /progress           → get all weight entries for the user, ordered by date
-//   POST /progress           → save a new weight entry for today
-//   GET  /progress/activity  → current commitment streak (for startup load)
-//   POST /progress/activity  → mark the user active today, return the new streak
+//   GET  /progress             → get all weight entries for the user, ordered by date
+//   POST /progress             → save a new weight entry for today
+//   GET  /progress/activity    → current commitment streak (for startup load)
+//   POST /progress/activity    → mark the user active today, return the new streak
+//   GET  /progress/goal-summary → NEW (Task 6) — real progress vs confirmed goal targets
 //
 // The streak ("أيام الالتزام") is persisted on the User row and incremented
 // server-side, so it survives a page refresh and is the single source of truth.
@@ -13,6 +14,7 @@ import { Router, Request, Response } from "express";
 import { prisma }         from "../lib/prisma";
 import { authenticate }   from "../middleware/auth";
 import { calculateBodyFat } from "../lib/bodyFat"; // NEW (Task 3)
+import { getGoalProgress } from "../lib/progressReader"; // NEW (Task 6)
 
 const router = Router();
 router.use(authenticate);
@@ -46,7 +48,7 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
   // weight-only update), so the chart doesn't lose data on partial saves.
   const user = await prisma.user.findUnique({
     where:  { id: req.user!.userId },
-    select: { gender: true, height: true, waist: true, hips: true, neck: true },
+    select: { gender: true, height: true, waist: true, hips: true, neck: true, startBodyFatPct: true },
   });
 
   const waistForCalc = waist !== undefined ? (waist ? Number(waist) : null) : user?.waist ?? null;
@@ -75,6 +77,16 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
 
   const todayStart = new Date();
   todayStart.setUTCHours(0, 0, 0, 0);
+
+  // NEW (Task 6 fix) — freeze the User's startBodyFatPct baseline the first
+  // time we're able to compute one, so goal-progress tracking has a real
+  // anchor point. Never overwrites it once set.
+  if (user?.startBodyFatPct == null && bodyFatPct != null) {
+    await prisma.user.update({
+      where: { id: req.user!.userId },
+      data:  { startBodyFatPct: bodyFatPct },
+    });
+  }
 
   // Upsert: update if today's entry exists, otherwise create a new one
   const entry = await prisma.progressEntry.upsert({
@@ -191,6 +203,16 @@ router.post("/activity", async (req: Request, res: Response): Promise<void> => {
   }
 
   res.json({ streak, lastActiveDate, bestStreak });
+});
+
+// ── GET /progress/goal-summary ──────────────────────────────────────────────
+// NEW (Task 6) — real progress (strength PRs, endurance PRs, body composition)
+// vs the user's confirmed main+mini goal targets (Task 4/5). Returns null main
+// and mini goal when the user hasn't been through the AI goal-confirmation
+// flow — GoalJourneyCard falls back to the old weight/waist card in that case.
+router.get("/goal-summary", async (req: Request, res: Response): Promise<void> => {
+  const result = await getGoalProgress(req.user!.userId);
+  res.json(result); // { goal, main, mini } or null
 });
 
 export default router;

@@ -16,6 +16,7 @@ import { Router, Request, Response } from "express";
 import { prisma }       from "../lib/prisma";
 import { authenticate } from "../middleware/auth";
 import { notify }       from "./notifications.routes";
+import { calculateBodyFat } from "../lib/bodyFat"; // NEW (Task 6 fix)
 
 const router = Router();
 
@@ -59,6 +60,13 @@ router.get("/me", async (req: Request, res: Response): Promise<void> => {
       targetDeadlift:       true,
       targetCardioDuration: true,
       goalConfirmedByAI:    true,
+      // NEW (Task 6-prep) — long-distance "main" goal, parallel to the mini fields above
+      mainTargetWeight:         true,
+      mainTargetBodyFatPct:     true,
+      mainTargetBenchPress:     true,
+      mainTargetSquat:          true,
+      mainTargetDeadlift:       true,
+      mainTargetCardioDuration: true,
       startWeight: true,
       startChest:  true,
       startWaist:  true,
@@ -94,6 +102,8 @@ router.put("/me", async (req: Request, res: Response): Promise<void> => {
     // NEW (Task 5) — confirmed goal targets from the AI onboarding flow
     targetBodyFatPct, targetLeanMass, targetBenchPress, targetSquat, targetDeadlift, targetCardioDuration,
     goalConfirmedByAI,
+    // NEW (Task 6-prep) — the long-distance "main" goal
+    mainTargetWeight, mainTargetBodyFatPct, mainTargetBenchPress, mainTargetSquat, mainTargetDeadlift, mainTargetCardioDuration,
     hasSetup,
   } = req.body;
 
@@ -105,6 +115,7 @@ router.put("/me", async (req: Request, res: Response): Promise<void> => {
     select: {
       weight: true, chest: true, waist: true, hips: true, arms: true, legs: true,
       startWeight: true, startChest: true, startWaist: true, startHips: true, startArms: true, startLegs: true,
+      gender: true, height: true, neck: true, startBodyFatPct: true, // NEW (Task 6 fix)
     },
   });
 
@@ -128,6 +139,30 @@ router.put("/me", async (req: Request, res: Response): Promise<void> => {
   const sHips   = freeze(existing?.startHips,   existing?.hips,   hips);
   const sArms   = freeze(existing?.startArms,   existing?.arms,   arms);
   const sLegs   = freeze(existing?.startLegs,   existing?.legs,   legs);
+
+  // NEW (Task 6 fix) — startBodyFatPct is derived (gender+height+waist+neck),
+  // not a directly-submitted field, so it can't reuse freeze() as-is. Merge
+  // this update's incoming values with what's already on the row, and freeze
+  // the FIRST TIME all four inputs happen to be available together (usually
+  // right when the onboarding chat's measurements question gets answered).
+  let sBodyFatPct: number | undefined;
+  if (existing?.startBodyFatPct == null) {
+    const finalGender = gender !== undefined ? gender : existing?.gender;
+    const finalHeight = height !== undefined ? Number(height) : existing?.height;
+    const finalWaist  = waist  !== undefined ? (waist ? Number(waist) : null) : existing?.waist;
+    const finalNeck   = neck   !== undefined ? (neck  ? Number(neck)  : null) : existing?.neck;
+    const finalHips   = hips   !== undefined ? (hips  ? Number(hips)  : null) : existing?.hips;
+    if ((finalGender === "male" || finalGender === "female") && finalHeight != null && finalWaist != null && finalNeck != null) {
+      try {
+        sBodyFatPct = calculateBodyFat({
+          gender: finalGender, heightCm: finalHeight, waistCm: finalWaist, neckCm: finalNeck,
+          hipsCm: finalHips ?? undefined,
+        });
+      } catch {
+        sBodyFatPct = undefined; // e.g. female without hips yet
+      }
+    }
+  }
 
   const updated = await prisma.user.update({
     where: { id: req.user!.userId },
@@ -158,6 +193,13 @@ router.put("/me", async (req: Request, res: Response): Promise<void> => {
       ...(targetDeadlift       !== undefined && { targetDeadlift:       Number(targetDeadlift) }),
       ...(targetCardioDuration !== undefined && { targetCardioDuration: Number(targetCardioDuration) }),
       ...(goalConfirmedByAI    !== undefined && { goalConfirmedByAI:    Boolean(goalConfirmedByAI) }),
+      // NEW (Task 6-prep) — the long-distance "main" goal, same pattern as above
+      ...(mainTargetWeight         !== undefined && { mainTargetWeight:         Number(mainTargetWeight) }),
+      ...(mainTargetBodyFatPct     !== undefined && { mainTargetBodyFatPct:     Number(mainTargetBodyFatPct) }),
+      ...(mainTargetBenchPress     !== undefined && { mainTargetBenchPress:     Number(mainTargetBenchPress) }),
+      ...(mainTargetSquat          !== undefined && { mainTargetSquat:          Number(mainTargetSquat) }),
+      ...(mainTargetDeadlift       !== undefined && { mainTargetDeadlift:       Number(mainTargetDeadlift) }),
+      ...(mainTargetCardioDuration !== undefined && { mainTargetCardioDuration: Number(mainTargetCardioDuration) }),
       ...(hasSetup     !== undefined && { hasSetup:     Boolean(hasSetup) }),
       // Freeze baselines the first time each metric is recorded (see freeze())
       ...(sWeight !== undefined && { startWeight: sWeight }),
@@ -166,6 +208,7 @@ router.put("/me", async (req: Request, res: Response): Promise<void> => {
       ...(sHips   !== undefined && { startHips:   sHips }),
       ...(sArms   !== undefined && { startArms:   sArms }),
       ...(sLegs   !== undefined && { startLegs:   sLegs }),
+      ...(sBodyFatPct !== undefined && { startBodyFatPct: sBodyFatPct }), // NEW (Task 6 fix)
     },
     select: {
       id:          true,
@@ -196,6 +239,13 @@ router.put("/me", async (req: Request, res: Response): Promise<void> => {
       targetDeadlift:       true,
       targetCardioDuration: true,
       goalConfirmedByAI:    true,
+      // NEW (Task 6-prep)
+      mainTargetWeight:         true,
+      mainTargetBodyFatPct:     true,
+      mainTargetBenchPress:     true,
+      mainTargetSquat:          true,
+      mainTargetDeadlift:       true,
+      mainTargetCardioDuration: true,
       startWeight: true,
       startChest:  true,
       startWaist:  true,

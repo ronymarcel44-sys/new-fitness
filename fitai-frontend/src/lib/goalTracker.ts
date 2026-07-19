@@ -214,3 +214,10 @@ export function streakMessage(streak: number, remaining: number): string {
 // ── helpers ───────────────────────────────────────────────────────────────────
 function clamp(n: number, lo: number, hi: number): number { return Math.min(hi, Math.max(lo, n)); }
 function round1(n: number): number { return Math.round(n * 10) / 10; }
+
+// NEW (Task 6) — for metrics with no meaningful "start" (a lift PR you've never
+// attempted, a cardio session you've never done): just current vs target.
+export function ratioPct(current: number, target: number): number {
+  if (target <= 0) return 0;
+  return Math.round(clamp((current / target) * 100, 0, 100));
+}

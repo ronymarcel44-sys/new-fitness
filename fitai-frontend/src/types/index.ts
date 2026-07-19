@@ -35,6 +35,14 @@ export interface UserProfile {
   targetDeadlift?: string;
   targetCardioDuration?: string;
   goalConfirmedByAI?: boolean;
+  // NEW (Task 6-prep) — long-distance "main" goal, parallel to the mini fields
+  // above. Only the field(s) matching the user's goal type are ever populated.
+  mainTargetWeight?: string;
+  mainTargetBodyFatPct?: string;
+  mainTargetBenchPress?: string;
+  mainTargetSquat?: string;
+  mainTargetDeadlift?: string;
+  mainTargetCardioDuration?: string;
   // قيم البداية المجمّدة (للتقدّم منذ البداية) — يديرها الباك-إند
   startWeight?: string;
   startChest?: string;
@@ -109,6 +117,8 @@ export interface Exercise {
   coachEdited?: boolean;
   exerciseType?: "cardio" | "strength";  // NEW (Task 4)
   durationMinutes?: number | null;       // NEW (Task 4) — cardio only, AI-prescribed target
+  actualWeightKg?: number | null;        // NEW (Task 6) — logged when marking a strength exercise done
+  actualDuration?: number | null;        // NEW (Task 6) — logged when marking a cardio exercise done
 }
 
 export interface DayWorkout {

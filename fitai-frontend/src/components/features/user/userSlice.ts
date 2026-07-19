@@ -43,6 +43,13 @@ interface BackendProfile {
   targetDeadlift:       number | null;
   targetCardioDuration: number | null;
   goalConfirmedByAI:    boolean;
+  // NEW (Task 6-prep) — long-distance "main" goal
+  mainTargetWeight:         number | null;
+  mainTargetBodyFatPct:     number | null;
+  mainTargetBenchPress:     number | null;
+  mainTargetSquat:          number | null;
+  mainTargetDeadlift:       number | null;
+  mainTargetCardioDuration: number | null;
   startWeight: number | null;
   startChest:  number | null;
   startWaist:  number | null;
@@ -99,6 +106,13 @@ function backendToFrontend(data: BackendProfile): Partial<UserProfile> {
     targetDeadlift:       data.targetDeadlift?.toString()       ?? "",
     targetCardioDuration: data.targetCardioDuration?.toString() ?? "",
     goalConfirmedByAI:    data.goalConfirmedByAI ?? false,
+    // NEW (Task 6-prep)
+    mainTargetWeight:         data.mainTargetWeight?.toString()         ?? "",
+    mainTargetBodyFatPct:     data.mainTargetBodyFatPct?.toString()     ?? "",
+    mainTargetBenchPress:     data.mainTargetBenchPress?.toString()     ?? "",
+    mainTargetSquat:          data.mainTargetSquat?.toString()          ?? "",
+    mainTargetDeadlift:       data.mainTargetDeadlift?.toString()       ?? "",
+    mainTargetCardioDuration: data.mainTargetCardioDuration?.toString() ?? "",
     startWeight:       data.startWeight?.toString()   ?? "",
     startChest:        data.startChest?.toString()    ?? "",
     startWaist:        data.startWaist?.toString()    ?? "",
@@ -183,6 +197,13 @@ export const saveProfileThunk = createAsyncThunk<
         targetDeadlift:       numOrUndefined(profileData.targetDeadlift),
         targetCardioDuration: numOrUndefined(profileData.targetCardioDuration),
         goalConfirmedByAI:    profileData.goalConfirmedByAI,
+        // NEW (Task 6-prep) — long-distance "main" goal, same pattern as the mini fields
+        mainTargetWeight:         numOrUndefined(profileData.mainTargetWeight),
+        mainTargetBodyFatPct:     numOrUndefined(profileData.mainTargetBodyFatPct),
+        mainTargetBenchPress:     numOrUndefined(profileData.mainTargetBenchPress),
+        mainTargetSquat:          numOrUndefined(profileData.mainTargetSquat),
+        mainTargetDeadlift:       numOrUndefined(profileData.mainTargetDeadlift),
+        mainTargetCardioDuration: numOrUndefined(profileData.mainTargetCardioDuration),
         hasSetup:    profileData.hasCompletedSetup,
       };
       const data = await apiRequest<BackendProfile>("PUT", "/users/me", body);
