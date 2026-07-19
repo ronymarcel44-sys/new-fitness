@@ -1,11 +1,15 @@
 import { Link } from "react-router-dom";
+import { useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { toggleDone, toggleDoneThunk } from "@/features/workout/workoutSlice"; // [added] toggleDoneThunk
+import { markActiveTodayThunk } from "@/features/progress/progressSlice"; // NEW (Task 6) — see summary note
+import { LogExerciseModal } from "@/components/workout/LogExerciseModal"; // NEW (Task 6)
 import { DAYS_ORDER } from "@/types";
+import type { Exercise } from "@/types";
 import { getGoalLabel } from "@/lib/goalLabels";
 import { GoalProgressMini } from "@/components/goal/GoalProgressMini";
 
@@ -16,6 +20,7 @@ export function DashboardPage() {
   const { weeklyPlan }               = useAppSelector((s) => s.workout);
   const { plan: nutritionPlan, dailyLog } = useAppSelector((s) => s.nutrition);
   const { streak }                   = useAppSelector((s) => s.progress);
+  const [loggingExercise, setLoggingExercise] = useState<Exercise | null>(null); // NEW (Task 6)
 
   const todayName     = DAYS_ORDER[new Date().getDay()];
   const todaySchedule = weeklyPlan?.[todayName];
@@ -34,11 +39,27 @@ export function DashboardPage() {
 
   const caloriesOver = !!(nutritionPlan && consumed.calories > nutritionPlan.totalCalories);
 
-  // [added] Persist the done state to DB alongside the Redux update
-  // ex.done is the current state — new state after toggle is !ex.done
-  const handleToggleExercise = (exerciseId: string, currentDone: boolean) => {
-    dispatch(toggleDone({ day: todayName, exerciseId }));
-    dispatch(toggleDoneThunk({ exerciseId, done: !currentDone }));
+  // NEW (Task 6) — marking DONE now requires the actual weight/duration used
+  // (same rule as WorkoutPage/ExerciseDetailPage), so this opens the log modal
+  // instead of toggling immediately. Un-checking never requires a value.
+  const handleToggleExercise = (ex: Exercise) => {
+    if (ex.done) {
+      dispatch(toggleDone({ day: todayName, exerciseId: ex.id }));
+      dispatch(toggleDoneThunk({ exerciseId: ex.id, done: false }));
+      return;
+    }
+    setLoggingExercise(ex);
+  };
+
+  // NEW (Task 6)
+  const confirmLog = (value: number) => {
+    if (!loggingExercise) return;
+    const isCardio = loggingExercise.exerciseType === "cardio";
+    const payload  = isCardio ? { actualDuration: value } : { actualWeightKg: value };
+    dispatch(toggleDone({ day: todayName, exerciseId: loggingExercise.id, ...payload }));
+    dispatch(toggleDoneThunk({ exerciseId: loggingExercise.id, done: true, ...payload }));
+    dispatch(markActiveTodayThunk()); // NEW (Task 6) — see summary note on streak consistency
+    setLoggingExercise(null);
   };
 
   if (!weeklyPlan && !nutritionPlan) {
@@ -72,6 +93,12 @@ export function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-7xl px-6 pb-20 pt-28">
+      {/* NEW (Task 6) — required weight/duration prompt when marking done */}
+      <LogExerciseModal
+        exercise={loggingExercise}
+        onConfirm={confirmLog}
+        onClose={() => setLoggingExercise(null)}
+      />
       {/* Header */}
       <div className="mb-8 flex items-start justify-between">
         <div>
@@ -143,7 +170,7 @@ export function DashboardPage() {
               <div className="space-y-1 mb-4">
                 {todayExercises.slice(0, 5).map((ex) => (
                   <div key={ex.id}
-                    onClick={() => handleToggleExercise(ex.id, ex.done)}
+                    onClick={() => handleToggleExercise(ex)}
                     className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 transition-all hover:bg-bg">
                     <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${ex.done ? "border border-accent/30 bg-accent/10 text-accent" : "border border-white/10 bg-bg text-slate-600"}`}>
                       {ex.done ? "✓" : "○"}

@@ -7,6 +7,7 @@ import { checkDayReset } from "@/features/nutrition/nutritionSlice";
 import { DAYS_ORDER, type DayName, type Exercise } from "@/types";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/api";
+import { LogExerciseModal } from "@/components/workout/LogExerciseModal"; // NEW (Task 6)
 
 const TODAY     = DAYS_ORDER[new Date().getDay()];
 const TODAY_IDX = new Date().getDay();
@@ -102,6 +103,7 @@ export function ExerciseDetailPage() {
   const [loadAi,    setLoadAi]    = useState(true);
   const [loadSim,   setLoadSim]   = useState(false);
   const [imgError,  setImgError]  = useState(false);
+  const [loggingExercise, setLoggingExercise] = useState<Exercise | null>(null); // NEW (Task 6)
 
   useEffect(() => {
     if (!exercise) return;
@@ -153,11 +155,26 @@ export function ExerciseDetailPage() {
     if (!hasMounted.current) { hasMounted.current = true; return; }
     if (!exercise || isPastDay) return;
     if (totalSets > 0 && completedSets.length === totalSets && !exercise.done) {
-     dispatch(toggleDone({ day, exerciseId: exercise.id }));
-      dispatch(toggleDoneThunk({ exerciseId: exercise.id, done: true })); // [added] persist to DB
-      dispatch(markActiveTodayThunk());
+      // NEW (Task 6) — was a direct dispatch; now opens the required weight
+      // prompt like the other two entry points, instead of assuming a value.
+      // markActiveTodayThunk moved into confirmLog() below — firing it here
+      // would count the day as active even if the user cancels the modal.
+      setLoggingExercise(exercise);
     }
   }, [completedSets.length]);
+
+  // NEW (Task 6) — called by LogExerciseModal once a valid value is entered.
+  // Shared by: all-sets-completed auto-trigger, the manual skip button, and
+  // the cardio completion button below.
+  function confirmLog(value: number) {
+    if (!loggingExercise) return;
+    const isCardio = loggingExercise.exerciseType === "cardio";
+    const payload  = isCardio ? { actualDuration: value } : { actualWeightKg: value };
+    dispatch(toggleDone({ day, exerciseId: loggingExercise.id, ...payload }));
+    dispatch(toggleDoneThunk({ exerciseId: loggingExercise.id, done: true, ...payload }));
+    dispatch(markActiveTodayThunk());
+    setLoggingExercise(null);
+  }
 
   function handleCompleteSet(setIdx: number) {
     if (completedSets.includes(setIdx)) return;
@@ -261,6 +278,13 @@ export function ExerciseDetailPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-6 pb-24 pt-28">
+
+      {/* NEW (Task 6) — required weight/duration prompt when marking done */}
+      <LogExerciseModal
+        exercise={loggingExercise}
+        onConfirm={confirmLog}
+        onClose={() => setLoggingExercise(null)}
+      />
 
       {/* ── شريط التنقل ── */}
       <div className="mb-6 flex items-center justify-between">
@@ -411,8 +435,8 @@ export function ExerciseDetailPage() {
         </div>
       )}
 
-      {/* ── Sets Tracker ── */}
-      {!isPastDay && (
+      {/* ── Sets Tracker (تمارين القوة فقط) ── */}
+      {!isPastDay && exercise.exerciseType !== "cardio" && (
         <div className="mb-6 overflow-hidden rounded-2xl border border-white/10 bg-bg-card">
 
           {/* رأس البطاقة */}
@@ -548,10 +572,7 @@ export function ExerciseDetailPage() {
           {/* إنجاز يدوي للتمرين كاملاً */}
           {!exercise.done && completedSets.length < totalSets && (
             <div className="border-t border-white/5 px-4 pb-4">
-                <button onClick={() => {
-                dispatch(toggleDone({ day, exerciseId: exercise.id }));
-                dispatch(toggleDoneThunk({ exerciseId: exercise.id, done: true })); // [added] persist to DB
-              }}
+                <button onClick={() => setLoggingExercise(exercise)}
                 className="mt-3 w-full rounded-xl border border-white/10 py-2.5 text-xs text-slate-500 transition-all hover:border-white/20 hover:text-slate-300">
                 تخطي هذا التمرين
               </button>
@@ -572,6 +593,37 @@ export function ExerciseDetailPage() {
                 إعادة التمرين
               </button>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* ── تتبع الكارديو (تمارين الكارديو فقط) — NEW (Task 6) ── */}
+      {!isPastDay && exercise.exerciseType === "cardio" && (
+        <div className="mb-6 overflow-hidden rounded-2xl border border-white/10 bg-bg-card p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <p className="font-bold">تتبع الكارديو</p>
+              {exercise.durationMinutes != null && (
+                <p className="mt-0.5 text-xs text-slate-500">الهدف المقترح: {exercise.durationMinutes} دقيقة</p>
+              )}
+            </div>
+            {exercise.done && (
+              <span className="flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-xs font-bold text-accent">
+                ✓ منجز
+              </span>
+            )}
+          </div>
+          {exercise.done ? (
+            <p className="text-sm text-slate-400">
+              سجّلت {exercise.actualDuration ?? "—"} دقيقة لهذا التمرين اليوم 🎉
+            </p>
+          ) : (
+            <button
+              onClick={() => setLoggingExercise(exercise)}
+              className="w-full rounded-xl bg-accent py-3 text-sm font-bold text-bg transition-all hover:bg-accent/90 active:scale-95"
+            >
+              ✓ سجّل إنجاز الكارديو
+            </button>
           )}
         </div>
       )}

@@ -1,10 +1,14 @@
 import { Link } from "react-router-dom";
+import { useState } from "react";
 import { ChevronLeft } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { toggleDone, toggleDoneThunk } from "@/features/workout/workoutSlice"; // [added] toggleDoneThunk
+import { markActiveTodayThunk } from "@/features/progress/progressSlice"; // NEW (Task 6) — see summary note
+import { LogExerciseModal } from "@/components/workout/LogExerciseModal"; // NEW (Task 6)
 import { DAYS_ORDER } from "@/types";
+import type { Exercise } from "@/types";
 import { cn } from "@/lib/utils";
 
 const TODAY     = DAYS_ORDER[new Date().getDay()];
@@ -14,11 +18,29 @@ export function WorkoutPage() {
   const dispatch = useAppDispatch();
   const { weeklyPlan } = useAppSelector((s) => s.workout);
   const coachExerciseNotes = useAppSelector((s) => s.user.coachExerciseNotes);
+  const [loggingExercise, setLoggingExercise] = useState<Exercise | null>(null); // NEW (Task 6)
 
-  // [added] Persist the done state to DB alongside the Redux update
-  const handleToggle = (exerciseId: string, currentDone: boolean) => {
-    dispatch(toggleDone({ day: TODAY, exerciseId }));
-    dispatch(toggleDoneThunk({ exerciseId, done: !currentDone }));
+  // NEW (Task 6) — marking DONE now requires the actual weight/duration used,
+  // so this opens the log modal instead of toggling immediately. Un-checking
+  // (already done → not done) never requires a value, so it still toggles right away.
+  const handleToggle = (ex: Exercise) => {
+    if (ex.done) {
+      dispatch(toggleDone({ day: TODAY, exerciseId: ex.id }));
+      dispatch(toggleDoneThunk({ exerciseId: ex.id, done: false }));
+      return;
+    }
+    setLoggingExercise(ex);
+  };
+
+  // NEW (Task 6) — called by LogExerciseModal once a valid value is entered
+  const confirmLog = (value: number) => {
+    if (!loggingExercise) return;
+    const isCardio = loggingExercise.exerciseType === "cardio";
+    const payload  = isCardio ? { actualDuration: value } : { actualWeightKg: value };
+    dispatch(toggleDone({ day: TODAY, exerciseId: loggingExercise.id, ...payload }));
+    dispatch(toggleDoneThunk({ exerciseId: loggingExercise.id, done: true, ...payload }));
+    dispatch(markActiveTodayThunk()); // NEW (Task 6) — see summary note on streak consistency
+    setLoggingExercise(null);
   };
 
   if (!weeklyPlan) {
@@ -101,7 +123,7 @@ export function WorkoutPage() {
                 <div className="flex items-center gap-4 p-4">
                   {/* زر إنجاز */}
                   <button
-                    onClick={() => handleToggle(ex.id, ex.done)}
+                    onClick={() => handleToggle(ex)}
                     className={cn(
                       "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold transition-all",
                       ex.done
@@ -163,6 +185,13 @@ export function WorkoutPage() {
           </div>
         </>
       )}
+
+      {/* NEW (Task 6) — required weight/duration prompt when marking done */}
+      <LogExerciseModal
+        exercise={loggingExercise}
+        onConfirm={confirmLog}
+        onClose={() => setLoggingExercise(null)}
+      />
     </div>
   );
 }
