@@ -7,17 +7,19 @@
 //      rolling, with milestones).
 // Plus achievements + motivational copy.
 
-import type { GoalKey } from "@/types";
-
 export type Direction = "up" | "down";
 
 // ── Goal classification ───────────────────────────────────────────────────────
-const WEIGHT_GOALS: GoalKey[] = ["fat_loss", "toning", "muscle_gain"];
-const DOWN_GOALS:   GoalKey[] = ["fat_loss", "toning", "body_recomposition"];
+// Intentionally typed as string[], not GoalKey[] — these arrays exist to keep
+// this OLD card's fallback working correctly for legacy accounts whose
+// `goal` value is one of the 3 removed from the product (goal redesign).
+// GoalKey itself no longer includes "toning", so it can't type these.
+const WEIGHT_GOALS: string[] = ["fat_loss", "toning", "muscle_gain"];
+const DOWN_GOALS:   string[] = ["fat_loss", "toning", "body_recomposition"];
 const WEIGHT_CHUNK: Record<string, number> = { fat_loss: 5, toning: 5, muscle_gain: 3 };
 
 export function isWeightGoal(goal: string): boolean {
-  return WEIGHT_GOALS.includes(goal as GoalKey);
+  return WEIGHT_GOALS.includes(goal);
 }
 
 // Recomposition tracks waist, not weight.
@@ -32,7 +34,7 @@ export function isConsistencyGoal(goal: string): boolean {
 }
 
 export function goalDirection(goal: string): Direction {
-  return DOWN_GOALS.includes(goal as GoalKey) ? "down" : "up";
+  return DOWN_GOALS.includes(goal) ? "down" : "up";
 }
 
 // ── Weight journey ────────────────────────────────────────────────────────────

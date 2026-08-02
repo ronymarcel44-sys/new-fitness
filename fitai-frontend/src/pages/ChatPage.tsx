@@ -32,8 +32,23 @@ export function ChatPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [retryNotice, setRetryNotice] = useState<string | null>(null);
   const bottomRef    = useRef<HTMLDivElement>(null);
+  const inputRef     = useRef<HTMLInputElement>(null);
   const initialized  = useRef(false);
   const autoSendRef  = useRef(false);
+  const autoBuildRef = useRef(false);
+
+  // The AI ends onboarding with a confirmation line ("...هذا هدفك النهائي...") and
+  // is forbidden to include the plan JSON in that same message — the plan is built
+  // on the FOLLOWING turn (the server switches to plan-build mode once it sees that
+  // line in the history). Marker must match GOAL_CONFIRMATION_MARKER in ai.routes.ts.
+  const GOAL_CONFIRMATION_MARKER = "هذا هدفك النهائي";
+
+  // Keep the message box focused: on first render and again each time the AI
+  // finishes replying (the input is disabled while loading, so re-focus once it
+  // re-enables) — the user never has to click back into it.
+  useEffect(() => {
+    if (!isLoading) inputRef.current?.focus();
+  }, [isLoading]);
 
   // Welcome message only after the DB fetch has settled and the chat is empty.
   // Waiting on `fetched` avoids a race where an empty GET /chat response wipes
@@ -59,6 +74,23 @@ export function ChatPage() {
       sendToAI(lastMsg.text);
     }
   }, [messages]);
+
+  // Auto-build the plan the moment the goal is confirmed — no throwaway "build it"
+  // message needed. When the last AI message is the confirmation line (and carries
+  // no plan JSON yet), re-send the history so the server builds the plan this turn.
+  useEffect(() => {
+    const lastMsg = messages[messages.length - 1];
+    if (
+      lastMsg?.role === "ai" &&
+      lastMsg.text.includes(GOAL_CONFIRMATION_MARKER) &&
+      !parsePlanFromText(lastMsg.text) &&
+      !autoBuildRef.current &&
+      !isLoading
+    ) {
+      autoBuildRef.current = true;
+      sendToAI(lastMsg.text);
+    }
+  }, [messages, isLoading]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -97,6 +129,8 @@ export function ChatPage() {
       dispatch(setLoading(false));
       setRetryNotice(null);
       autoSendRef.current = false;
+      // autoBuildRef is intentionally NOT reset here — it fires once per session so
+      // a build turn that comes back without JSON can't trigger an auto-retry loop.
     }
   };
 
@@ -139,11 +173,14 @@ export function ChatPage() {
         Object.entries(parsed.profile).filter(([, v]) => v !== "" && v != null)
       ) as Partial<typeof parsed.profile>;
 
-      // NEW (Task 5) — pull the goal-specific target(s) out of confirmedGoal
-      // (only the ones relevant to this user's goal are non-null; the rest come
-      // back null from the AI and are dropped here so they never overwrite
-      // anything). Values arrive as numbers but UserProfile stores them as
-      // strings, matching every other numeric field on the profile.
+      // Goal-specific target(s) pulled out of confirmedGoal (goal redesign —
+      // single-tier now, only 6 possible fields: mainTargetWeight,
+      // mainTargetBodyFatPct, mainTargetBenchPress, mainTargetSquat,
+      // mainTargetDeadlift, mainTargetOverheadPress). Only the ones relevant
+      // to this user's goal are non-null; the rest come back null from the AI
+      // and are dropped here so they never overwrite anything. Values arrive
+      // as numbers but UserProfile stores them as strings, matching every
+      // other numeric field on the profile.
       const confirmedTargets = parsed.confirmedGoal
         ? Object.fromEntries(
             Object.entries(parsed.confirmedGoal)
@@ -151,14 +188,19 @@ export function ChatPage() {
               .map(([k, v]) => [k, String(v)])
           )
         : {};
+      const hasConfirmedTargets = Object.keys(confirmedTargets).length > 0;
 
       const profileData = {
         ...cleanedProfile,
         ...confirmedTargets,
         hasCompletedSetup: true,
-        // Only flip this on when the AI actually sent a confirmedGoal block —
-        // never send `false` here, so a later unrelated save can't un-confirm it.
-        ...(parsed.confirmedGoal ? { goalConfirmedByAI: true } : {}),
+        // FIX (goal redesign) — only flip this on when confirmedGoal actually
+        // contained real data, not just whenever the AI included the key at
+        // all (which could be an all-null object if it forgot to fill it in —
+        // that used to silently mark the goal "confirmed" with nothing behind
+        // it). Never send `false` here either way, so a later unrelated save
+        // can't un-confirm it.
+        ...(hasConfirmedTargets ? { goalConfirmedByAI: true } : {}),
       };
       dispatch(setProfile(profileData));
       dispatch(completeSetup());
@@ -317,6 +359,7 @@ export function ChatPage() {
 
       <div className="flex gap-3 pt-3">
         <input
+          ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && send(input)}

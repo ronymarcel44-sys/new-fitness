@@ -40,7 +40,8 @@ export interface CoachMe {
   status:          "pending" | "active" | "inactive" | "rejected";
   bio:             string | null;
   yearsExperience: number | null;
-  certification:   string | null;
+  certification:   string | null;                                       // legacy single field
+  certifications:  { type: string; number: string; typeOther?: string }[] | null; // multiple certs
   profileImage:    string | null;
 }
 
@@ -103,7 +104,7 @@ export const fetchCoachUsersThunk = createAsyncThunk<CoachUser[], void>(
 // Coach edits their own profile (bio, specialty, experience, certification, photo)
 export const updateCoachProfileThunk = createAsyncThunk<
   CoachMe,
-  { name?: string; bio?: string; specialty?: string; yearsExperience?: string; certification?: string; profileImage?: string }
+  { name?: string; bio?: string; specialty?: string; yearsExperience?: string; certifications?: { type: string; number: string; typeOther?: string }[]; profileImage?: string }
 >(
   "coach/updateProfile",
   async (data) => apiRequest<CoachMe>("PATCH", "/coach/me", data)

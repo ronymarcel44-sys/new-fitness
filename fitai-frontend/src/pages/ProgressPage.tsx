@@ -8,17 +8,15 @@ import { TrendingDown, TrendingUp, Minus, RefreshCw } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
-import { addWeightEntryThunk, fetchProgressThunk } from "@/features/progress/progressSlice";
+import { addWeightEntryThunk, fetchProgressThunk, fetchGoalSummaryThunk } from "@/features/progress/progressSlice";
 import { setProfile, saveProfileThunk } from "@/features/user/userSlice"; // [added] saveProfileThunk
 import { addMessage } from "@/features/chat/chatSlice";
 import { useNavigate } from "react-router-dom";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { getGoalLabel } from "@/lib/goalLabels";
 import { StreakJourneyCard } from "@/components/goal/StreakJourneyCard";
 import { GoalJourneyCard } from "@/components/goal/GoalJourneyCard";
-import { AchievementsCard } from "@/components/goal/AchievementsCard";
 import { MeasurementsProgressCard } from "@/components/goal/MeasurementsProgressCard";
 import { celebrate } from "@/features/celebration/celebrationSlice";
 import { isWeightGoal, goalDirection, autoTargetWeight, computeMilestones } from "@/lib/goalTracker";
@@ -60,6 +58,17 @@ export function ProgressPage() {
   // is empty; once saved, the field disappears here and shows read-only in the
   // profile card below instead — see design discussion.
   const [genderForm, setGenderForm] = useState<"male" | "female" | "">("");
+  const [tab, setTab] = useState<"main" | "other">("main");
+
+  // Refresh progress + goal summary every time the page opens. The app-load
+  // fetch in App.tsx runs once at login — for a user who confirms their goal
+  // during that session (onboarding), it captured an empty summary from before
+  // the goal existed. Re-fetching on mount guarantees the goal card reflects the
+  // current backend state without needing a full page reload.
+  useEffect(() => {
+    dispatch(fetchProgressThunk());
+    dispatch(fetchGoalSummaryThunk());
+  }, [dispatch]);
 
   // Keep the form in sync with the profile as it loads/changes. The profile is
   // fetched asynchronously on app start, so without this the inputs would stay
@@ -125,6 +134,7 @@ export function ProgressPage() {
         neck:   updatedProfile.neck, // NEW (Task 3)
       }));
       dispatch(fetchProgressThunk());   // rebuild the chart from the DB
+      dispatch(fetchGoalSummaryThunk()); // refresh info rows (body-fat) + Muscle Mass after a measurements change
 
       // Celebrate a newly-crossed weight milestone (or reaching the goal).
       if (isWeightGoal(profile.goal)) {
@@ -205,10 +215,31 @@ export function ProgressPage() {
           {/* Goal journey — universal streak goal (shown for every goal type) */}
           <StreakJourneyCard />
 
-          {/* Goal-specific journey (weight goals) */}
-          <GoalJourneyCard />
+          {/* Tab bar — main goal vs other measurements */}
+          <div className="mb-6 flex gap-1 rounded-2xl border border-white/10 bg-white/5 p-1">
+            {[
+              { key: "main"  as const, label: "الهدف الرئيسي" },
+              { key: "other" as const, label: "قياسات أخرى" },
+            ].map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setTab(key)}
+                className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all ${
+                  tab === key ? "bg-accent/15 text-accent" : "text-slate-400 hover:text-white"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
 
-          {/* Summary cards */}
+          {/* Goal journey — primary metrics in the main tab, supporting in the other */}
+          {tab === "main"
+            ? <GoalJourneyCard view="primary" />
+            : <GoalJourneyCard view="supporting" />}
+
+          {/* Summary cards — main tab */}
+          {tab === "main" && (
           <div className="mb-6 grid gap-4 sm:grid-cols-3">
             {[
               { label: "الوزن الابتدائي", val: `${profile.startWeight || weightData[0]?.weight || profile.weight || "—"} كغ`, color: "text-slate-300" },
@@ -221,9 +252,10 @@ export function ProgressPage() {
               </Card>
             ))}
           </div>
+          )}
 
-          {/* Weight chart */}
-          {chartData.length > 1 && (
+          {/* Weight chart — main tab */}
+          {tab === "main" && chartData.length > 1 && (
             <Card className="mb-6">
               <h3 className="mb-5 font-bold">منحنى الوزن (كغ) ⚖️</h3>
               <ResponsiveContainer width="100%" height={220}>
@@ -238,12 +270,21 @@ export function ProgressPage() {
             </Card>
           )}
 
-          {/* Measurements form */}
+          {/* Measurements form — other tab */}
+          {tab === "other" && (
           <Card className="mb-6 border-accent/20">
             <div className="mb-5 flex items-center gap-3">
               <RefreshCw className="h-5 w-5 text-accent" />
               <h3 className="font-bold">تحديث قياساتك</h3>
             </div>
+
+            {/* Muscle-mass depends on a real composition measurement (waist+neck),
+                not weight alone — nudge users on lean-based goals to include them. */}
+            {["muscle_gain", "bodybuilding", "body_recomposition"].includes(profile.goal) && (
+              <div className="mb-5 rounded-xl border border-accent/20 bg-accent/5 px-4 py-2.5 text-xs text-slate-300">
+                💡 لتحديث كتلة العضل، قِس خصرك ورقبتك مع وزنك.
+              </div>
+            )}
 
             {/* NEW (Task 3) — one-time gender select, needed for the body-fat
                 formula. Disappears once saved; shown read-only below instead. */}
@@ -305,33 +346,10 @@ export function ProgressPage() {
               </p>
             </div>
           </Card>
+          )}
 
-          {/* Measurements progress since baseline */}
-          <MeasurementsProgressCard />
-
-          {/* Achievements badges */}
-          <AchievementsCard />
-
-          {/* User profile card */}
-          <Card>
-            <h3 className="mb-4 font-bold">ملفك الشخصي</h3>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {[
-                { label: "الاسم",    val: profile.name },
-                { label: "العمر",    val: profile.age    ? `${profile.age} سنة`   : "—" },
-                { label: "الطول",    val: profile.height ? `${profile.height} سم` : "—" },
-                { label: "الجنس",    val: profile.gender === "male" ? "ذكر" : profile.gender === "female" ? "أنثى" : "—" }, // NEW (Task 3)
-                { label: "الهدف",    val: getGoalLabel(profile.goal) },
-                { label: "المستوى", val: profile.level  },
-                { label: "الأمراض", val: profile.diseases || "لا يوجد" },
-              ].map(({ label, val }) => (
-                <div key={label} className="rounded-xl border border-white/10 bg-bg px-4 py-3">
-                  <div className="text-xs text-slate-500">{label}</div>
-                  <div className="mt-1 font-semibold">{val}</div>
-                </div>
-              ))}
-            </div>
-          </Card>
+          {/* Measurements progress since baseline — other tab */}
+          {tab === "other" && <MeasurementsProgressCard />}
       </>
     </div>
   );

@@ -77,10 +77,19 @@ export function AdminCoaches() {
               </span>
 
               {/* Verification credentials (self-registered coaches) */}
-              {(coach.certification || coach.bio || coach.yearsExperience != null) && (
+              {((coach.certifications && coach.certifications.length > 0) || coach.certification || coach.bio || coach.yearsExperience != null) && (
                 <div className="rounded-xl border border-white/5 bg-bg p-3 space-y-1.5 text-xs">
                   <p className="font-semibold text-slate-400">بيانات التحقق</p>
-                  {coach.certification && (
+                  {coach.certifications && coach.certifications.length > 0 ? (
+                    <div className="space-y-1">
+                      <span className="text-slate-500">الشهادات:</span>
+                      {coach.certifications.map((c, i) => (
+                        <p key={i} className="text-slate-300">
+                          • {c.typeOther || c.type} <span className="text-slate-500">— رقم:</span> {c.number}
+                        </p>
+                      ))}
+                    </div>
+                  ) : coach.certification && (
                     <p className="text-slate-300"><span className="text-slate-500">الشهادة: </span>{coach.certification}</p>
                   )}
                   {coach.yearsExperience != null && (

@@ -16,7 +16,8 @@ import { Router, Request, Response } from "express";
 import { prisma }       from "../lib/prisma";
 import { authenticate } from "../middleware/auth";
 import { notify }       from "./notifications.routes";
-import { calculateBodyFat } from "../lib/bodyFat"; // NEW (Task 6 fix)
+import { calculateBodyFat } from "../lib/bodyFat";
+import { normalizeCertifications, stripCertNumbers } from "../lib/certs";
 
 const router = Router();
 
@@ -44,35 +45,34 @@ router.get("/me", async (req: Request, res: Response): Promise<void> => {
       fitnessLevel:true,
       goal:        true,
       diseases:    true,
-      gender:      true,   // NEW (Task 3)
+      gender:      true,
       chest:       true,
       waist:       true,
       hips:        true,
       arms:        true,
       legs:        true,
-      neck:        true,   // NEW (Task 3)
+      neck:        true,
       targetWeight:true,
-      // NEW (Task 5) — confirmed goal targets from the AI onboarding flow
-      targetBodyFatPct:     true,
-      targetLeanMass:       true,
-      targetBenchPress:     true,
-      targetSquat:          true,
-      targetDeadlift:       true,
-      targetCardioDuration: true,
-      goalConfirmedByAI:    true,
-      // NEW (Task 6-prep) — long-distance "main" goal, parallel to the mini fields above
+      // Single target per metric (goal redesign — no more mini/main tiers).
+      // targetLeanMass has no "main" counterpart — see schema.prisma's comment.
+      targetLeanMass:           true,
+      goalConfirmedByAI:        true,
       mainTargetWeight:         true,
       mainTargetBodyFatPct:     true,
+      mainTargetWaist:          true, // NEW (goal redesign)
+      mainTargetHips:           true, // NEW (goal redesign)
+      mainTargetNeck:           true, // NEW (goal redesign)
       mainTargetBenchPress:     true,
       mainTargetSquat:          true,
       mainTargetDeadlift:       true,
-      mainTargetCardioDuration: true,
+      mainTargetOverheadPress:  true, // NEW (goal redesign)
       startWeight: true,
       startChest:  true,
       startWaist:  true,
       startHips:   true,
       startArms:   true,
       startLegs:   true,
+      startNeck:   true, // NEW (goal redesign)
       createdAt:   true,
     },
   });
@@ -91,19 +91,29 @@ router.get("/me", async (req: Request, res: Response): Promise<void> => {
 // undefined fields are ignored so a partial update won't wipe other data.
 // Called after the AI generates a plan (to save body data) and after
 // the user manually updates their measurements.
+//
+// REWRITE (goal redesign) — the mini-tier fields (targetBodyFatPct,
+// targetBenchPress, targetSquat, targetDeadlift, targetCardioDuration) are
+// deprecated: no longer read from the request or written. targetLeanMass is
+// the one exception, kept active. This handler now also computes the
+// auto-calculated companion targets (waist/hips/neck for fat_loss, muscle
+// mass for muscle_gain/body_recomposition, weight for body_recomposition) —
+// see goal-tracking-redesign-plan.md Part A5 for the formulas.
 router.put("/me", async (req: Request, res: Response): Promise<void> => {
   const {
     name, age, height, weight,
     fitnessLevel, goal, diseases,
-    gender,                          // NEW (Task 3)
+    gender,
     chest, waist, hips, arms, legs,
-    neck,                            // NEW (Task 3)
+    neck,
     targetWeight,
-    // NEW (Task 5) — confirmed goal targets from the AI onboarding flow
-    targetBodyFatPct, targetLeanMass, targetBenchPress, targetSquat, targetDeadlift, targetCardioDuration,
+    targetLeanMass,
     goalConfirmedByAI,
-    // NEW (Task 6-prep) — the long-distance "main" goal
-    mainTargetWeight, mainTargetBodyFatPct, mainTargetBenchPress, mainTargetSquat, mainTargetDeadlift, mainTargetCardioDuration,
+    mainTargetWeight, mainTargetBodyFatPct,
+    mainTargetWaist, mainTargetHips, mainTargetNeck,             // NEW (goal redesign)
+    mainTargetBenchPress, mainTargetSquat, mainTargetDeadlift,
+    mainTargetOverheadPress,                                     // NEW (goal redesign)
+    startBench, startSquat, startDeadlift, startOverheadPress,   // NEW (Phase 2) — lift baselines
     hasSetup,
   } = req.body;
 
@@ -113,9 +123,13 @@ router.put("/me", async (req: Request, res: Response): Promise<void> => {
   const existing = await prisma.user.findUnique({
     where:  { id: req.user!.userId },
     select: {
-      weight: true, chest: true, waist: true, hips: true, arms: true, legs: true,
-      startWeight: true, startChest: true, startWaist: true, startHips: true, startArms: true, startLegs: true,
-      gender: true, height: true, neck: true, startBodyFatPct: true, // NEW (Task 6 fix)
+      weight: true, chest: true, waist: true, hips: true, arms: true, legs: true, neck: true,
+      startWeight: true, startChest: true, startWaist: true, startHips: true,
+      startArms: true, startLegs: true, startNeck: true,
+      startBench: true, startSquat: true, startDeadlift: true, startOverheadPress: true, // NEW (Phase 2)
+      gender: true, height: true, startBodyFatPct: true,
+      goal: true, // needed to know which auto-calc branch applies below
+      fitnessLevel: true, // NEW — drives the level-based muscle-gain lean ratio
     },
   });
 
@@ -139,27 +153,67 @@ router.put("/me", async (req: Request, res: Response): Promise<void> => {
   const sHips   = freeze(existing?.startHips,   existing?.hips,   hips);
   const sArms   = freeze(existing?.startArms,   existing?.arms,   arms);
   const sLegs   = freeze(existing?.startLegs,   existing?.legs,   legs);
+  const sNeck   = freeze(existing?.startNeck,   existing?.neck,   neck); // NEW (goal redesign)
+  // NEW (Phase 2) — lifts have no "current" column, so freeze straight from the
+  // AI-supplied incoming value (prevVal undefined). Never overwrites once set.
+  const sBench    = freeze(existing?.startBench,         undefined, startBench);
+  const sSquat    = freeze(existing?.startSquat,         undefined, startSquat);
+  const sDeadlift = freeze(existing?.startDeadlift,      undefined, startDeadlift);
+  const sOHP      = freeze(existing?.startOverheadPress, undefined, startOverheadPress);
 
-  // NEW (Task 6 fix) — startBodyFatPct is derived (gender+height+waist+neck),
-  // not a directly-submitted field, so it can't reuse freeze() as-is. Merge
-  // this update's incoming values with what's already on the row, and freeze
-  // the FIRST TIME all four inputs happen to be available together (usually
-  // right when the onboarding chat's measurements question gets answered).
-  let sBodyFatPct: number | undefined;
-  if (existing?.startBodyFatPct == null) {
-    const finalGender = gender !== undefined ? gender : existing?.gender;
-    const finalHeight = height !== undefined ? Number(height) : existing?.height;
-    const finalWaist  = waist  !== undefined ? (waist ? Number(waist) : null) : existing?.waist;
-    const finalNeck   = neck   !== undefined ? (neck  ? Number(neck)  : null) : existing?.neck;
-    const finalHips   = hips   !== undefined ? (hips  ? Number(hips)  : null) : existing?.hips;
-    if ((finalGender === "male" || finalGender === "female") && finalHeight != null && finalWaist != null && finalNeck != null) {
-      try {
-        sBodyFatPct = calculateBodyFat({
-          gender: finalGender, heightCm: finalHeight, waistCm: finalWaist, neckCm: finalNeck,
-          hipsCm: finalHips ?? undefined,
-        });
-      } catch {
-        sBodyFatPct = undefined; // e.g. female without hips yet
+  // liveBodyFatPct — computed from whichever values are freshest (this
+  // request's incoming gender/height/waist/neck/hips, falling back to what's
+  // already on the row). Always computed (not just when unfrozen) because the
+  // body_recomposition auto-calc below needs the CURRENT number, not
+  // necessarily the frozen start.
+  const finalGender = gender !== undefined ? gender : existing?.gender;
+  const finalHeight = height !== undefined ? Number(height) : existing?.height;
+  const finalWaist  = waist  !== undefined ? (waist ? Number(waist) : null) : existing?.waist;
+  const finalNeck   = neck   !== undefined ? (neck  ? Number(neck)  : null) : existing?.neck;
+  const finalHips   = hips   !== undefined ? (hips  ? Number(hips)  : null) : existing?.hips;
+  let liveBodyFatPct: number | undefined;
+  if ((finalGender === "male" || finalGender === "female") && finalHeight != null && finalWaist != null && finalNeck != null) {
+    try {
+      liveBodyFatPct = calculateBodyFat({
+        gender: finalGender, heightCm: finalHeight, waistCm: finalWaist, neckCm: finalNeck,
+        hipsCm: finalHips ?? undefined,
+      });
+    } catch {
+      liveBodyFatPct = undefined; // e.g. female without hips yet
+    }
+  }
+  // Freeze startBodyFatPct the first time it becomes available (unchanged behavior)
+  const sBodyFatPct = existing?.startBodyFatPct == null ? liveBodyFatPct : undefined;
+
+  // ── Auto-calculated companion targets (goal redesign — see plan doc A5) ──
+  // Only ever fire when the AI's "asked" number for that goal arrives THIS
+  // request, and only when the prerequisite start/current values are
+  // available (falls back to undefined otherwise — the field just doesn't
+  // get set yet, same graceful-degradation pattern used everywhere else).
+  const effectiveGoal = goal !== undefined ? goal : existing?.goal;
+
+  let autoTargetLeanMass:    number | undefined;
+  let autoMainTargetWeight:  number | undefined; // body_recomposition only
+  if ((effectiveGoal === "muscle_gain" || effectiveGoal === "bodybuilding") && mainTargetWeight !== undefined) {
+    const baseStartWeight = existing?.startWeight ?? sWeight;
+    const baseStartBF     = existing?.startBodyFatPct ?? sBodyFatPct;
+    if (baseStartWeight != null && baseStartBF != null) {
+      const effectiveLevel = fitnessLevel !== undefined ? fitnessLevel : existing?.fitnessLevel;
+      const leanRatio = effectiveLevel === "مبتدئ" ? 0.6 : effectiveLevel === "متقدم" ? 0.3 : 0.45;
+      const weightGain = Number(mainTargetWeight) - baseStartWeight;
+      const startLean  = baseStartWeight * (1 - baseStartBF / 100);
+      autoTargetLeanMass = Math.round((startLean + leanRatio * weightGain) * 10) / 10;
+    }
+  }
+  if (effectiveGoal === "body_recomposition" && mainTargetBodyFatPct !== undefined) {
+    const currentWeightVal = weight !== undefined ? Number(weight) : existing?.weight;
+    const currentBFVal     = liveBodyFatPct ?? existing?.startBodyFatPct;
+    if (currentWeightVal != null && currentBFVal != null) {
+      const currentLean = currentWeightVal * (1 - currentBFVal / 100);
+      autoTargetLeanMass = Math.round(currentLean * 1.03 * 10) / 10; // aim for ~+3% lean (recomp = fat down, muscle up)
+      const mtbf = Number(mainTargetBodyFatPct);
+      if (mtbf < 100) {
+        autoMainTargetWeight = Math.round((currentLean / (1 - mtbf / 100)) * 10) / 10;
       }
     }
   }
@@ -175,40 +229,47 @@ router.put("/me", async (req: Request, res: Response): Promise<void> => {
       ...(fitnessLevel !== undefined && { fitnessLevel }),
       ...(goal         !== undefined && { goal }),
       ...(diseases     !== undefined && { diseases }),
-      ...(gender       !== undefined && { gender }),                                    // NEW (Task 3)
+      ...(gender       !== undefined && { gender }),
       ...(chest        !== undefined && { chest:        chest ? Number(chest) : null }),
       ...(waist        !== undefined && { waist:        waist ? Number(waist) : null }),
       ...(hips         !== undefined && { hips:         hips  ? Number(hips)  : null }),
       ...(arms         !== undefined && { arms:         arms  ? Number(arms)  : null }),
       ...(legs         !== undefined && { legs:         legs  ? Number(legs)  : null }),
-      ...(neck         !== undefined && { neck:         neck  ? Number(neck)  : null }), // NEW (Task 3)
+      ...(neck         !== undefined && { neck:         neck  ? Number(neck)  : null }),
       ...(targetWeight !== undefined && { targetWeight: targetWeight ? Number(targetWeight) : null }),
-      // NEW (Task 5) — each is only ever sent by ChatPage when the AI's
-      // confirmedGoal block actually included it, so a plain Number() is safe
-      // (no "clear to null" use case here, unlike targetWeight).
-      ...(targetBodyFatPct     !== undefined && { targetBodyFatPct:     Number(targetBodyFatPct) }),
-      ...(targetLeanMass       !== undefined && { targetLeanMass:       Number(targetLeanMass) }),
-      ...(targetBenchPress     !== undefined && { targetBenchPress:     Number(targetBenchPress) }),
-      ...(targetSquat          !== undefined && { targetSquat:          Number(targetSquat) }),
-      ...(targetDeadlift       !== undefined && { targetDeadlift:       Number(targetDeadlift) }),
-      ...(targetCardioDuration !== undefined && { targetCardioDuration: Number(targetCardioDuration) }),
-      ...(goalConfirmedByAI    !== undefined && { goalConfirmedByAI:    Boolean(goalConfirmedByAI) }),
-      // NEW (Task 6-prep) — the long-distance "main" goal, same pattern as above
-      ...(mainTargetWeight         !== undefined && { mainTargetWeight:         Number(mainTargetWeight) }),
-      ...(mainTargetBodyFatPct     !== undefined && { mainTargetBodyFatPct:     Number(mainTargetBodyFatPct) }),
-      ...(mainTargetBenchPress     !== undefined && { mainTargetBenchPress:     Number(mainTargetBenchPress) }),
-      ...(mainTargetSquat          !== undefined && { mainTargetSquat:          Number(mainTargetSquat) }),
-      ...(mainTargetDeadlift       !== undefined && { mainTargetDeadlift:       Number(mainTargetDeadlift) }),
-      ...(mainTargetCardioDuration !== undefined && { mainTargetCardioDuration: Number(mainTargetCardioDuration) }),
-      ...(hasSetup     !== undefined && { hasSetup:     Boolean(hasSetup) }),
+      // Directly-AI-set targets (each only ever sent when confirmedGoal
+      // actually included it, so a plain Number() is safe here)
+      ...(mainTargetWeight        !== undefined && { mainTargetWeight:        Number(mainTargetWeight) }),
+      ...(mainTargetBodyFatPct    !== undefined && { mainTargetBodyFatPct:    Number(mainTargetBodyFatPct) }),
+      ...(mainTargetBenchPress    !== undefined && { mainTargetBenchPress:    Number(mainTargetBenchPress) }),
+      ...(mainTargetSquat         !== undefined && { mainTargetSquat:         Number(mainTargetSquat) }),
+      ...(mainTargetDeadlift      !== undefined && { mainTargetDeadlift:      Number(mainTargetDeadlift) }),
+      ...(mainTargetOverheadPress !== undefined && { mainTargetOverheadPress: Number(mainTargetOverheadPress) }),
+      // Auto-calculated targets — prefer an explicit value if one was ever
+      // sent directly (future-proofing / manual override), else use what was
+      // computed above. Only one source is ever populated per goal in practice.
+      ...((targetLeanMass  !== undefined || autoTargetLeanMass  !== undefined) &&
+        { targetLeanMass:  Number(targetLeanMass  ?? autoTargetLeanMass) }),
+      // body_recomposition's derived weight target — merges into the SAME
+      // mainTargetWeight field fat_loss/muscle_gain/bodybuilding set directly
+      // above; only one goal's branch ever fires per request.
+      ...(autoMainTargetWeight !== undefined && mainTargetWeight === undefined &&
+        { mainTargetWeight: autoMainTargetWeight }),
+      ...(goalConfirmedByAI !== undefined && { goalConfirmedByAI: Boolean(goalConfirmedByAI) }),
+      ...(hasSetup          !== undefined && { hasSetup:          Boolean(hasSetup) }),
       // Freeze baselines the first time each metric is recorded (see freeze())
-      ...(sWeight !== undefined && { startWeight: sWeight }),
-      ...(sChest  !== undefined && { startChest:  sChest }),
-      ...(sWaist  !== undefined && { startWaist:  sWaist }),
-      ...(sHips   !== undefined && { startHips:   sHips }),
-      ...(sArms   !== undefined && { startArms:   sArms }),
-      ...(sLegs   !== undefined && { startLegs:   sLegs }),
-      ...(sBodyFatPct !== undefined && { startBodyFatPct: sBodyFatPct }), // NEW (Task 6 fix)
+      ...(sWeight     !== undefined && { startWeight:     sWeight }),
+      ...(sChest      !== undefined && { startChest:      sChest }),
+      ...(sWaist      !== undefined && { startWaist:      sWaist }),
+      ...(sHips       !== undefined && { startHips:       sHips }),
+      ...(sArms       !== undefined && { startArms:       sArms }),
+      ...(sLegs       !== undefined && { startLegs:       sLegs }),
+      ...(sNeck       !== undefined && { startNeck:       sNeck }),      // NEW (goal redesign)
+      ...(sBodyFatPct !== undefined && { startBodyFatPct: sBodyFatPct }),
+      ...(sBench    !== undefined && { startBench:         sBench }),      // NEW (Phase 2)
+      ...(sSquat    !== undefined && { startSquat:         sSquat }),
+      ...(sDeadlift !== undefined && { startDeadlift:      sDeadlift }),
+      ...(sOHP      !== undefined && { startOverheadPress: sOHP }),
     },
     select: {
       id:          true,
@@ -223,35 +284,32 @@ router.put("/me", async (req: Request, res: Response): Promise<void> => {
       fitnessLevel:true,
       goal:        true,
       diseases:    true,
-      gender:      true,   // NEW (Task 3)
+      gender:      true,
       chest:       true,
       waist:       true,
       hips:        true,
       arms:        true,
       legs:        true,
-      neck:        true,   // NEW (Task 3)
+      neck:        true,
       targetWeight:true,
-      // NEW (Task 5)
-      targetBodyFatPct:     true,
-      targetLeanMass:       true,
-      targetBenchPress:     true,
-      targetSquat:          true,
-      targetDeadlift:       true,
-      targetCardioDuration: true,
-      goalConfirmedByAI:    true,
-      // NEW (Task 6-prep)
+      targetLeanMass:           true,
+      goalConfirmedByAI:        true,
       mainTargetWeight:         true,
       mainTargetBodyFatPct:     true,
+      mainTargetWaist:          true,
+      mainTargetHips:           true,
+      mainTargetNeck:           true,
       mainTargetBenchPress:     true,
       mainTargetSquat:          true,
       mainTargetDeadlift:       true,
-      mainTargetCardioDuration: true,
+      mainTargetOverheadPress:  true,
       startWeight: true,
       startChest:  true,
       startWaist:  true,
       startHips:   true,
       startArms:   true,
       startLegs:   true,
+      startNeck:   true,
     },
   });
 
@@ -268,14 +326,22 @@ router.get("/me/coach", async (req: Request, res: Response): Promise<void> => {
       coach: {
         select: {
           id: true, name: true, email: true, specialty: true, status: true,
-          bio: true, yearsExperience: true, certification: true, profileImage: true,
+          bio: true, yearsExperience: true, certification: true, certifications: true, profileImage: true,
+          _count: { select: { assignments: true } },
         },
       },
     },
   });
 
-  // Return null if the user has no coach — frontend handles this gracefully
-  res.json(assignment?.coach ?? null);
+  // Return null if the user has no coach — frontend handles this gracefully.
+  // Certificate numbers are private → stripped; expose only the certificate types.
+  const coach = assignment?.coach;
+  res.json(coach ? {
+    ...coach,
+    _count: undefined,
+    clientCount:    coach._count.assignments,
+    certifications: stripCertNumbers(normalizeCertifications(coach.certifications)),
+  } : null);
 });
 
 // ── GET /users/me/coach-notes ───────────────────────────────────────────────────
@@ -374,11 +440,18 @@ router.get("/coaches", async (_req: Request, res: Response): Promise<void> => {
     where:   { status: "active" },
     select:  {
       id: true, name: true, specialty: true, status: true,
-      bio: true, yearsExperience: true, certification: true, profileImage: true,
+      bio: true, yearsExperience: true, certification: true, certifications: true, profileImage: true,
+      _count: { select: { assignments: true } },
     },
     orderBy: { name: "asc" },
   });
-  res.json(coaches);
+  // Certificate numbers are private → stripped; users see only the certificate
+  // types plus a live count of the coach's current clients.
+  res.json(coaches.map(({ _count, ...c }) => ({
+    ...c,
+    clientCount:    _count.assignments,
+    certifications: stripCertNumbers(normalizeCertifications(c.certifications)),
+  })));
 });
 
 // ── POST /users/me/coach ────────────────────────────────────────────────────────

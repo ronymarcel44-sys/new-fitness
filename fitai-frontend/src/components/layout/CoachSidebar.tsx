@@ -72,17 +72,6 @@ export function CoachSidebar() {
             </Link>
           );
         })}
-
-        {/* رابط العودة للتطبيق الرئيسي */}
-        <div className="mt-6 border-t border-white/10 pt-4">
-          <Link
-            to="/dashboard"
-            className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-500 transition-all hover:bg-white/5 hover:text-slate-300"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            التطبيق الرئيسي
-          </Link>
-        </div>
       </nav>
 
       {/* زر تسجيل الخروج */}

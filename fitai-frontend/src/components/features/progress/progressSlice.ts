@@ -71,22 +71,47 @@ export const fetchActivityThunk = createAsyncThunk<ActivityResponse, void>(
   async () => apiRequest<ActivityResponse>("GET", "/progress/activity")
 );
 
-// ── Goal summary (Task 6) — real progress vs the confirmed main+mini targets ──
-// Mirrors fitai-backend/src/lib/progressReader.ts's GoalProgress/GoalMetric shape.
-// "journey" metrics (body fat %, weight, lean mass) have a real start point and
-// get run through goalTracker.ts's computeJourney/computeMilestones on render.
-// "ratio" (endurance) and "lifts" (strength) have no start — just current vs target.
-export interface JourneyMetric { kind: "journey"; unit: string; direction: "up" | "down"; start: number; current: number; target: number; }
-export interface RatioMetric   { kind: "ratio";   unit: string; current: number; target: number; }
-export interface LiftsMetric   { kind: "lifts";   unit: string; lifts: { label: string; current: number; target: number }[]; }
-export type GoalMetric = JourneyMetric | RatioMetric | LiftsMetric;
-export interface GoalSummary { goal: string; main: GoalMetric | null; mini: GoalMetric | null; }
+// ── Goal summary (goal redesign) — real progress vs the confirmed goal target(s) ──
+// Mirrors fitai-backend/src/lib/progressReader.ts's GoalProgress/Metric shape
+// exactly. Every metric already has its progressPct computed server-side
+// (the weighted-average formula in goal-tracking-redesign-plan.md A4) — the
+// frontend just renders it, no calculation happens here.
+export interface GoalMetricData {
+  label:       string;
+  unit:        string;
+  direction:   "up" | "down";
+  start:       number | null;
+  current:     number | null;
+  target:      number | null;
+  progressPct: number | null;
+  primary:     boolean;
+}
+export interface ReferenceMeasurement {
+  label:   string;
+  unit:    string;
+  current: number | null;
+}
+export interface InformationalMetric {
+  label:     string;
+  unit:      string;
+  direction: "up" | "down";
+  start:     number | null;
+  current:   number | null;
+}
+export interface GoalProgress {
+  goal:          string;
+  metrics:       GoalMetricData[];
+  informational: InformationalMetric[];
+  reference:     ReferenceMeasurement[];
+  overallPct:    number | null;
+}
 
-// Returns null when the user hasn't been through the AI goal-confirmation flow —
-// GoalJourneyCard falls back to the old weight/waist card in that case.
-export const fetchGoalSummaryThunk = createAsyncThunk<GoalSummary | null, void>(
+// Returns null when the user hasn't been through the AI goal-confirmation flow,
+// or their goal is one of the 3 removed from the product — GoalJourneyCard
+// falls back to the old weight/waist card in both cases.
+export const fetchGoalSummaryThunk = createAsyncThunk<GoalProgress | null, void>(
   "progress/fetchGoalSummary",
-  async () => apiRequest<GoalSummary | null>("GET", "/progress/goal-summary")
+  async () => apiRequest<GoalProgress | null>("GET", "/progress/goal-summary")
 );
 
 // Marks the user active today; the backend computes and returns the new streak.
@@ -115,7 +140,7 @@ interface ProgressState {
   streak:         number;
   lastActiveDate: string;
   bestStreak:     number;
-  goalSummary:    GoalSummary | null; // NEW (Task 6)
+  goalSummary:    GoalProgress | null; // goal redesign
 }
 
 const initialState: ProgressState = {
@@ -124,7 +149,7 @@ const initialState: ProgressState = {
   streak:         0,
   lastActiveDate: "",
   bestStreak:     0,
-  goalSummary:    null, // NEW (Task 6)
+  goalSummary:    null, // goal redesign
 };
 
 // ── Slice ─────────────────────────────────────────────────────────────────────
@@ -160,7 +185,7 @@ const progressSlice = createSlice({
       state.lastActiveDate = action.payload.lastActiveDate;
       state.bestStreak     = action.payload.bestStreak;
     });
-    // NEW (Task 6)
+    // Goal redesign — real progress vs the confirmed goal target(s)
     builder.addCase(fetchGoalSummaryThunk.fulfilled, (state, action) => {
       state.goalSummary = action.payload;
     });

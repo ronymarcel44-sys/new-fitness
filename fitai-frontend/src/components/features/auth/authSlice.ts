@@ -88,7 +88,8 @@ export const registerCoachThunk = createAsyncThunk<
   AuthResponse,
   {
     name: string; email: string; password: string; specialty: string;
-    bio: string; yearsExperience: string; certification: string;
+    bio: string; yearsExperience: string;
+    certifications: { type: string; number: string; typeOther?: string }[];
   },
   { rejectValue: string }
 >(

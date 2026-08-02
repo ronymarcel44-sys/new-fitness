@@ -2,6 +2,12 @@
 
 import type { UserRole } from "@/types";
 
+// ── Coach certificates ────────────────────────────────────────────
+// Known certifying bodies for the coach registration/profile dropdown.
+// "أخرى" is the free-text fallback — picking it reveals a text box for a
+// custom certificate name.
+export const CERT_TYPES = ["ISSA", "NASM", "ACE", "NSCA", "ACSM", "أخرى"] as const;
+
 // ── حسابات تجريبية لتسجيل الدخول ─────────────────────────────────────────────
 // [تغيير] أُضيف حساب coach1 لاختبار بوابة المدرب
 export const FAKE_USERS: {
@@ -38,6 +44,7 @@ export const NAV_LINKS = [
   { path: "/chat",       label: "المساعد"   },
   { path: "/progress",   label: "التقدم"    },
   { path: "/weekly-plan",label: "الجدول"    },
+  { path: "/profile",    label: "حسابي"     },
 ];
 
 // ── Admin Nav ─────────────────────────────────────────────────────

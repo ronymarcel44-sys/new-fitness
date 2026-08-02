@@ -7,14 +7,15 @@
 
 import { prisma } from "./prisma";
 
+// CLEANUP (goal redesign) — synced to the final 5-goal list. Mirrors GoalKey
+// in fitai-backend/src/lib/bodyFat.ts and GOAL_LABEL_AR in
+// fitai-frontend/src/lib/goalLabels.ts — keep all three in sync if this changes.
 const GOAL_AR: Record<string, string> = {
   fat_loss:           "خسارة دهون",
   muscle_gain:        "بناء عضلات",
+  bodybuilding:       "تضخيم عضلي",
   body_recomposition: "إعادة تشكيل الجسم",
-  toning:             "نحت وتقوية",
   strength:           "زيادة القوة",
-  general_fitness:    "لياقة عامة",
-  endurance:          "تحمل ولياقة قلبية",
 };
 
 const LEVEL_AR: Record<string, string> = {
@@ -133,6 +134,36 @@ export async function buildUserContext(userId: string): Promise<string> {
     if (m.legs  != null) mLines.push(`- الأرجل: ${m.legs} سم`);
     if (mLines.length > 0) {
       lines.push("", "القياسات الحالية:", ...mLines);
+    }
+
+    // Current lift weights — for goals where lifts matter, so a plan rebuild can
+    // anchor the main lifts to real numbers (heaviest logged, else the frozen
+    // onboarding baseline) instead of inventing them.
+    if (user.goal && ["strength", "muscle_gain", "bodybuilding"].includes(user.goal)) {
+      const liftRows = await prisma.workoutExercise.findMany({
+        where:  { plan: { userId }, exerciseType: "strength", actualWeightKg: { not: null } },
+        select: { nameEn: true, actualWeightKg: true },
+      });
+      const maxLift = (kw: string): number | null =>
+        liftRows
+          .filter((r) => r.nameEn?.toLowerCase().includes(kw))
+          .reduce<number | null>((mx, r) => Math.max(mx ?? 0, r.actualWeightKg ?? 0) || null, null);
+
+      const lifts = [
+        { ar: "بنش برس",   kw: "bench",    base: user.startBench },
+        { ar: "سكوات",     kw: "squat",    base: user.startSquat },
+        { ar: "رفعة ميتة", kw: "deadlift", base: user.startDeadlift },
+        { ar: "بريس علوي", kw: "overhead", base: user.startOverheadPress },
+      ];
+      const liftLines = lifts
+        .map((l) => {
+          const cur = maxLift(l.kw) ?? l.base;
+          return cur != null ? `- ${l.ar}: ${cur} كغ` : null;
+        })
+        .filter((x): x is string => x !== null);
+      if (liftLines.length > 0) {
+        lines.push("", "أوزان الرفعات الحالية:", ...liftLines);
+      }
     }
 
     // Activity section — always renders (zero is a real signal)

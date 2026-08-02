@@ -1,13 +1,16 @@
 // src/types/index.ts
 
+// CLEANUP (goal redesign) — synced to the final 5-goal list. Mirrors the
+// GoalKey union in fitai-backend/src/lib/bodyFat.ts and the GOAL_AR map in
+// fitai-backend/src/lib/userContext.ts — keep all three in sync if this changes.
+// `toning` / `general_fitness` / `endurance` were removed from the product;
+// `bodybuilding` was added.
 export type GoalKey =
   | "fat_loss"
   | "muscle_gain"
+  | "bodybuilding"
   | "body_recomposition"
-  | "toning"
-  | "strength"
-  | "general_fitness"
-  | "endurance";
+  | "strength";
 
 export interface UserProfile {
   name: string;
@@ -17,32 +20,29 @@ export interface UserProfile {
   goal: GoalKey | "";
   level: string;
   diseases: string;
-  gender?: "male" | "female" | "";   // NEW (Task 3) — required for the Navy body-fat formula
+  gender?: "male" | "female" | "";   // required for the Navy body-fat formula
   chest?: string;
   waist?: string;
   hips?: string;
   arms?: string;
   legs?: string;
-  neck?: string;                     // NEW (Task 3) — cm, alongside the other measurements
-  targetWeight?: string;   // الوزن المستهدف — فارغ = هدف تلقائي
-  // NEW (Task 5) — confirmed goal targets from the AI onboarding flow (Task 4).
-  // Only the field(s) relevant to the user's goal type are ever populated —
-  // see confirmedGoal in ai.routes.ts for which fields map to which goal.
-  targetBodyFatPct?: string;
-  targetLeanMass?: string;
-  targetBenchPress?: string;
-  targetSquat?: string;
-  targetDeadlift?: string;
-  targetCardioDuration?: string;
+  neck?: string;                     // cm, alongside the other measurements
+  targetWeight?: string;   // الوزن المستهدف — فارغ = هدف تلقائي (legacy, unrelated feature — see schema comment)
+  // Single target per metric (goal redesign) — confirmed once via the AI
+  // onboarding flow, no more separate near-term tier. Only the field(s)
+  // relevant to the user's goal type are ever populated — see confirmedGoal
+  // in ai.routes.ts for which fields map to which goal.
+  targetLeanMass?: string; // كغ — no "main" counterpart needed, this name is already unambiguous
   goalConfirmedByAI?: boolean;
-  // NEW (Task 6-prep) — long-distance "main" goal, parallel to the mini fields
-  // above. Only the field(s) matching the user's goal type are ever populated.
   mainTargetWeight?: string;
   mainTargetBodyFatPct?: string;
+  mainTargetWaist?: string;         // NEW (goal redesign) — auto-calculated, fat_loss only
+  mainTargetHips?: string;          // NEW (goal redesign) — auto-calculated, fat_loss only
+  mainTargetNeck?: string;          // NEW (goal redesign) — auto-calculated, fat_loss only
   mainTargetBenchPress?: string;
   mainTargetSquat?: string;
   mainTargetDeadlift?: string;
-  mainTargetCardioDuration?: string;
+  mainTargetOverheadPress?: string; // NEW (goal redesign) — strength's 4th lift
   // قيم البداية المجمّدة (للتقدّم منذ البداية) — يديرها الباك-إند
   startWeight?: string;
   startChest?: string;
@@ -50,6 +50,11 @@ export interface UserProfile {
   startHips?: string;
   startArms?: string;
   startLegs?: string;
+  startNeck?: string;                // NEW (goal redesign)
+  startBench?: string;               // NEW (Phase 2) — frozen lift baselines from onboarding
+  startSquat?: string;
+  startDeadlift?: string;
+  startOverheadPress?: string;
   hasCompletedSetup: boolean;
   plan?: "free" | "premium";
 }
@@ -89,6 +94,18 @@ export interface CoachMessage {
   createdAt:  string;
 }
 
+// A coach certificate — a coach can hold several. `type` is a known body
+// (ISSA/NASM/ACE/NSCA/ACSM) or the literal "أخرى", in which case `typeOther`
+// holds the free-text name. `number` is the license number.
+export interface Certificate {
+  type: string;
+  number: string;
+  typeOther?: string;
+}
+// User-facing variant — the license number is stripped server-side, so users
+// only ever receive the certificate type.
+export type PublicCertificate = Pick<Certificate, "type" | "typeOther">;
+
 // A human coach as surfaced to a premium user (assigned coach or pickable coach).
 // Distinct from the admin-facing `Coach` type below, which also carries assignedUsers.
 export interface AssignedCoach {
@@ -99,7 +116,9 @@ export interface AssignedCoach {
   status?: string;
   bio?: string | null;
   yearsExperience?: number | null;
-  certification?: string | null;
+  certification?: string | null;              // legacy single field (admin-created coaches)
+  certifications?: PublicCertificate[];       // numbers stripped for the user side
+  clientCount?: number;                       // current active clients ("متدرب حالياً")
   profileImage?: string | null;
 }
 
@@ -232,7 +251,8 @@ export interface Coach {
   // Verification credentials — present for self-registered coaches, null for admin-created
   bio?: string | null;
   yearsExperience?: number | null;
-  certification?: string | null;
+  certification?: string | null;          // legacy single field
+  certifications?: Certificate[];         // multiple certs (type + number) — admin sees numbers
 }
 
 export interface AdminStats {

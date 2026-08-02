@@ -48,7 +48,7 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
   // weight-only update), so the chart doesn't lose data on partial saves.
   const user = await prisma.user.findUnique({
     where:  { id: req.user!.userId },
-    select: { gender: true, height: true, waist: true, hips: true, neck: true, startBodyFatPct: true },
+    select: { gender: true, height: true, waist: true, hips: true, neck: true, startBodyFatPct: true, startNeck: true },
   });
 
   const waistForCalc = waist !== undefined ? (waist ? Number(waist) : null) : user?.waist ?? null;
@@ -78,13 +78,17 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
   const todayStart = new Date();
   todayStart.setUTCHours(0, 0, 0, 0);
 
-  // NEW (Task 6 fix) — freeze the User's startBodyFatPct baseline the first
-  // time we're able to compute one, so goal-progress tracking has a real
-  // anchor point. Never overwrites it once set.
-  if (user?.startBodyFatPct == null && bodyFatPct != null) {
+  // Freeze the User's startBodyFatPct / startNeck baselines the first time
+  // we're able to compute/record one, so goal-progress tracking has a real
+  // anchor point. Never overwrites either once set. (startNeck was missed in
+  // the original Task 1/3 work — added as part of the goal redesign.)
+  const freezeData: { startBodyFatPct?: number; startNeck?: number } = {};
+  if (user?.startBodyFatPct == null && bodyFatPct != null) freezeData.startBodyFatPct = bodyFatPct;
+  if (user?.startNeck == null && neckForCalc != null) freezeData.startNeck = neckForCalc;
+  if (Object.keys(freezeData).length > 0) {
     await prisma.user.update({
       where: { id: req.user!.userId },
-      data:  { startBodyFatPct: bodyFatPct },
+      data:  freezeData,
     });
   }
 
@@ -206,13 +210,14 @@ router.post("/activity", async (req: Request, res: Response): Promise<void> => {
 });
 
 // ── GET /progress/goal-summary ──────────────────────────────────────────────
-// NEW (Task 6) — real progress (strength PRs, endurance PRs, body composition)
-// vs the user's confirmed main+mini goal targets (Task 4/5). Returns null main
-// and mini goal when the user hasn't been through the AI goal-confirmation
-// flow — GoalJourneyCard falls back to the old weight/waist card in that case.
+// Real progress (strength PRs, body composition) vs the user's confirmed goal
+// target(s) — see goal-tracking-redesign-plan.md. Returns null when the user
+// hasn't been through the AI goal-confirmation flow, or their goal is one of
+// the 3 removed from the product — the frontend falls back to the old
+// weight/waist card in both cases.
 router.get("/goal-summary", async (req: Request, res: Response): Promise<void> => {
   const result = await getGoalProgress(req.user!.userId);
-  res.json(result); // { goal, main, mini } or null
+  res.json(result); // { goal, metrics, reference, overallPct } or null
 });
 
 export default router;

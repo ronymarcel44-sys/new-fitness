@@ -18,6 +18,7 @@ import { Router, Request, Response, NextFunction } from "express";
 import { prisma }       from "../lib/prisma";
 import { authenticate } from "../middleware/auth";
 import { requireRole }  from "../middleware/role";
+import { normalizeCertifications } from "../lib/certs";
 import { notify }       from "./notifications.routes";
 
 const router = Router();
@@ -31,7 +32,7 @@ router.get("/me", async (req: Request, res: Response): Promise<void> => {
     where:  { id: req.user!.userId },
     select: {
       id: true, name: true, email: true, specialty: true, status: true,
-      bio: true, yearsExperience: true, certification: true, profileImage: true,
+      bio: true, yearsExperience: true, certification: true, certifications: true, profileImage: true,
     },
   });
   if (!coach) {
@@ -45,7 +46,7 @@ router.get("/me", async (req: Request, res: Response): Promise<void> => {
 // Coach edits their own profile (bio, specialty, experience, certification, photo).
 // Ungated so a coach can keep their profile current regardless of status.
 router.patch("/me", async (req: Request, res: Response): Promise<void> => {
-  const { name, bio, specialty, yearsExperience, certification, profileImage } = req.body;
+  const { name, bio, specialty, yearsExperience, certifications, profileImage } = req.body;
 
   const updated = await prisma.coach.update({
     where: { id: req.user!.userId },
@@ -54,12 +55,12 @@ router.patch("/me", async (req: Request, res: Response): Promise<void> => {
       ...(bio             !== undefined && { bio: bio || null }),
       ...(specialty       !== undefined && { specialty }),
       ...(yearsExperience !== undefined && { yearsExperience: yearsExperience != null && yearsExperience !== "" ? Number(yearsExperience) : null }),
-      ...(certification   !== undefined && { certification: certification || null }),
+      ...(certifications  !== undefined && { certifications: normalizeCertifications(certifications) }),
       ...(profileImage    !== undefined && { profileImage: profileImage || null }),
     },
     select: {
       id: true, name: true, email: true, specialty: true, status: true,
-      bio: true, yearsExperience: true, certification: true, profileImage: true,
+      bio: true, yearsExperience: true, certification: true, certifications: true, profileImage: true,
     },
   });
   res.json(updated);

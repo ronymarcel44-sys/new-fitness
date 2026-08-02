@@ -71,12 +71,6 @@ export function AdminSidebar() {
 
       {/* Bottom actions */}
       <div className="p-4 border-t border-white/10 flex flex-col gap-2">
-        <NavLink
-          to="/dashboard"
-          className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-slate-400 hover:text-white hover:bg-white/5 transition-all"
-        >
-          <span>🏠</span> العودة للتطبيق
-        </NavLink>
         <button
           onClick={handleLogout}
           className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all w-full"

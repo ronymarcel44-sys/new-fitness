@@ -22,6 +22,8 @@ export function Navbar() {
 
   // باقة المستخدم تأتي من ملفه الشخصي الحقيقي (GET /users/me)
   const isPremium = useAppSelector((s) => s.user.profile.plan) === "premium";
+  // اسم المستخدم من ملفه الحقيقي — يبقى متزامناً بعد تعديله في صفحة الحساب
+  const profileName = useAppSelector((s) => s.user.profile.name);
 
   const [scrolled, setScrolled] = useState(false);
   const [open,     setOpen]     = useState(false);
@@ -93,7 +95,7 @@ export function Navbar() {
 
         {/* Desktop right side */}
         <div className="hidden items-center gap-3 md:flex">
-          <span className="text-sm text-slate-400">{displayName}</span>
+          <span className="text-sm text-slate-400">{profileName || displayName}</span>
 
           {/* [جديد] رابط لوحة التحكم للأدمن */}
           {role === "admin" && (

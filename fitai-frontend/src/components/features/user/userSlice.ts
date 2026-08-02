@@ -33,29 +33,27 @@ interface BackendProfile {
   hips:        number | null;
   arms:        number | null;
   legs:        number | null;
-  neck:        number | null; // NEW (Task 3)
-  targetWeight:number | null;
-  // NEW (Task 5)
-  targetBodyFatPct:     number | null;
-  targetLeanMass:       number | null;
-  targetBenchPress:     number | null;
-  targetSquat:          number | null;
-  targetDeadlift:       number | null;
-  targetCardioDuration: number | null;
+  neck:        number | null;
+  targetWeight:number | null; // legacy, unrelated feature — see schema comment
+  // Single target per metric (goal redesign) — no more mini/main tiers.
+  targetLeanMass:       number | null; // no "main" counterpart needed, name is already unambiguous
   goalConfirmedByAI:    boolean;
-  // NEW (Task 6-prep) — long-distance "main" goal
   mainTargetWeight:         number | null;
   mainTargetBodyFatPct:     number | null;
+  mainTargetWaist:          number | null; // NEW (goal redesign)
+  mainTargetHips:           number | null; // NEW (goal redesign)
+  mainTargetNeck:           number | null; // NEW (goal redesign)
   mainTargetBenchPress:     number | null;
   mainTargetSquat:          number | null;
   mainTargetDeadlift:       number | null;
-  mainTargetCardioDuration: number | null;
+  mainTargetOverheadPress:  number | null; // NEW (goal redesign)
   startWeight: number | null;
   startChest:  number | null;
   startWaist:  number | null;
   startHips:   number | null;
   startArms:   number | null;
   startLegs:   number | null;
+  startNeck:   number | null; // NEW (goal redesign)
 }
 
 interface UserState {
@@ -96,29 +94,27 @@ function backendToFrontend(data: BackendProfile): Partial<UserProfile> {
     hips:              data.hips?.toString()          ?? "",
     arms:              data.arms?.toString()          ?? "",
     legs:              data.legs?.toString()          ?? "",
-    neck:              data.neck?.toString()          ?? "", // NEW (Task 3)
+    neck:              data.neck?.toString()          ?? "",
     targetWeight:      data.targetWeight?.toString()  ?? "",
-    // NEW (Task 5)
-    targetBodyFatPct:     data.targetBodyFatPct?.toString()     ?? "",
+    // Single target per metric (goal redesign) — no more mini/main tiers.
     targetLeanMass:       data.targetLeanMass?.toString()       ?? "",
-    targetBenchPress:     data.targetBenchPress?.toString()     ?? "",
-    targetSquat:          data.targetSquat?.toString()          ?? "",
-    targetDeadlift:       data.targetDeadlift?.toString()       ?? "",
-    targetCardioDuration: data.targetCardioDuration?.toString() ?? "",
     goalConfirmedByAI:    data.goalConfirmedByAI ?? false,
-    // NEW (Task 6-prep)
     mainTargetWeight:         data.mainTargetWeight?.toString()         ?? "",
     mainTargetBodyFatPct:     data.mainTargetBodyFatPct?.toString()     ?? "",
+    mainTargetWaist:          data.mainTargetWaist?.toString()          ?? "",
+    mainTargetHips:           data.mainTargetHips?.toString()           ?? "",
+    mainTargetNeck:           data.mainTargetNeck?.toString()           ?? "",
     mainTargetBenchPress:     data.mainTargetBenchPress?.toString()     ?? "",
     mainTargetSquat:          data.mainTargetSquat?.toString()          ?? "",
     mainTargetDeadlift:       data.mainTargetDeadlift?.toString()       ?? "",
-    mainTargetCardioDuration: data.mainTargetCardioDuration?.toString() ?? "",
+    mainTargetOverheadPress:  data.mainTargetOverheadPress?.toString()  ?? "",
     startWeight:       data.startWeight?.toString()   ?? "",
     startChest:        data.startChest?.toString()    ?? "",
     startWaist:        data.startWaist?.toString()    ?? "",
     startHips:         data.startHips?.toString()     ?? "",
     startArms:         data.startArms?.toString()     ?? "",
     startLegs:         data.startLegs?.toString()     ?? "",
+    startNeck:         data.startNeck?.toString()     ?? "",
     hasCompletedSetup: data.hasSetup,
     plan:              (data.plan as "free" | "premium") ?? "free",
   };
@@ -183,27 +179,32 @@ export const saveProfileThunk = createAsyncThunk<
         hips:        numOrUndefined(profileData.hips),
         arms:        numOrUndefined(profileData.arms),
         legs:        numOrUndefined(profileData.legs),
-        neck:        numOrUndefined(profileData.neck), // NEW (Task 3)
+        neck:        numOrUndefined(profileData.neck),
         // Pass the raw value: "75" → 75, "" → clears to null (revert to auto),
         // undefined → omitted so other saves never wipe an existing target.
         targetWeight:profileData.targetWeight,
-        // NEW (Task 5) — ChatPage only ever includes these when the AI's
-        // confirmedGoal block set them, so a plain truthy-check + Number() is
-        // enough (no "clear to null" use case here, unlike targetWeight).
-        targetBodyFatPct:     numOrUndefined(profileData.targetBodyFatPct),
+        // Single target per metric (goal redesign) — ChatPage only ever
+        // includes these when the AI's confirmedGoal block set them, so a
+        // plain truthy-check + Number() is enough (no "clear to null" use
+        // case here, unlike targetWeight). targetLeanMass has no "main"
+        // counterpart — it's auto-calculated server-side either way, never
+        // sent directly by the AI, but still passed through here for the
+        // rare manual-override path (see user.routes.ts).
         targetLeanMass:       numOrUndefined(profileData.targetLeanMass),
-        targetBenchPress:     numOrUndefined(profileData.targetBenchPress),
-        targetSquat:          numOrUndefined(profileData.targetSquat),
-        targetDeadlift:       numOrUndefined(profileData.targetDeadlift),
-        targetCardioDuration: numOrUndefined(profileData.targetCardioDuration),
         goalConfirmedByAI:    profileData.goalConfirmedByAI,
-        // NEW (Task 6-prep) — long-distance "main" goal, same pattern as the mini fields
         mainTargetWeight:         numOrUndefined(profileData.mainTargetWeight),
         mainTargetBodyFatPct:     numOrUndefined(profileData.mainTargetBodyFatPct),
+        mainTargetWaist:          numOrUndefined(profileData.mainTargetWaist),
+        mainTargetHips:           numOrUndefined(profileData.mainTargetHips),
+        mainTargetNeck:           numOrUndefined(profileData.mainTargetNeck),
         mainTargetBenchPress:     numOrUndefined(profileData.mainTargetBenchPress),
         mainTargetSquat:          numOrUndefined(profileData.mainTargetSquat),
         mainTargetDeadlift:       numOrUndefined(profileData.mainTargetDeadlift),
-        mainTargetCardioDuration: numOrUndefined(profileData.mainTargetCardioDuration),
+        mainTargetOverheadPress:  numOrUndefined(profileData.mainTargetOverheadPress),
+        startBench:         numOrUndefined(profileData.startBench),         // NEW (Phase 2) — lift baselines
+        startSquat:         numOrUndefined(profileData.startSquat),
+        startDeadlift:      numOrUndefined(profileData.startDeadlift),
+        startOverheadPress: numOrUndefined(profileData.startOverheadPress),
         hasSetup:    profileData.hasCompletedSetup,
       };
       const data = await apiRequest<BackendProfile>("PUT", "/users/me", body);

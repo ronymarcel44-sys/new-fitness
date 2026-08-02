@@ -24,9 +24,11 @@ export function parsePlanFromText(text: string): {
   // NEW (Task 5/6-prep) — the goal-specific target(s) the user confirmed in chat
   // (Task 4). Mini = near-term checkpoint, main = long-distance destination.
   // Only the field(s) relevant to their goal type are non-null; the rest are null.
+  // Goal redesign — single target per metric now, only 6 possible fields
+  // (was 12 across two tiers). Only the field(s) relevant to the user's goal
+  // type are ever non-null; the rest are null.
   confirmedGoal?: Partial<Record<
-    | "targetBodyFatPct" | "targetLeanMass" | "targetBenchPress" | "targetSquat" | "targetDeadlift" | "targetCardioDuration"
-    | "mainTargetWeight" | "mainTargetBodyFatPct" | "mainTargetBenchPress" | "mainTargetSquat" | "mainTargetDeadlift" | "mainTargetCardioDuration",
+    "mainTargetWeight" | "mainTargetBodyFatPct" | "mainTargetBenchPress" | "mainTargetSquat" | "mainTargetDeadlift" | "mainTargetOverheadPress" | "startBench" | "startSquat" | "startDeadlift" | "startOverheadPress",
     number | null
   >>;
 } | null {
@@ -43,7 +45,7 @@ export function parsePlanFromText(text: string): {
       profile:       parsed.profile,
       workout,
       nutrition:     parsed.nutrition,
-      confirmedGoal: parsed.confirmedGoal, // NEW (Task 5)
+      confirmedGoal: parsed.confirmedGoal,
     };
   } catch { return null; }
 }

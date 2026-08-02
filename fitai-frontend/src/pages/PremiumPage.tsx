@@ -15,6 +15,8 @@ import {
 import { apiRequest } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { CoachAvatar } from "@/components/coach/CoachAvatar";
+import { CoachDetailModal } from "@/components/coach/CoachDetailModal";
+import type { AssignedCoach } from "@/types";
 
 // مميزات البريميوم — كل ميزة لها icon ووصف
 const PREMIUM_FEATURES = [
@@ -49,6 +51,7 @@ export function PremiumPage() {
   const [choosingId, setChoosingId] = useState<string | null>(null);
   const [switching, setSwitching]   = useState(false);  // show picker to change coach
   const [removing, setRemoving]     = useState(false);
+  const [detailCoach, setDetailCoach] = useState<AssignedCoach | null>(null); // coach open in the detail popup
 
   // عند العودة من Stripe: نتحقق من الدفع ونرقّي الحساب، أو نعرض إلغاء الدفع
   useEffect(() => {
@@ -99,7 +102,7 @@ export function PremiumPage() {
     setChoosingId(coachId);
     dispatch(chooseCoachThunk(coachId))
       .unwrap()
-      .then(() => setSwitching(false))
+      .then(() => { setSwitching(false); setDetailCoach(null); })
       .catch(() => setError("تعذّر تعيين المدرب، حاول مرة أخرى"))
       .finally(() => setChoosingId(null));
   };
@@ -206,7 +209,15 @@ export function PremiumPage() {
                   {coach.yearsExperience != null && (
                     <span className="rounded-full bg-white/5 px-2 py-0.5 text-slate-300">⏳ {coach.yearsExperience} سنوات خبرة</span>
                   )}
-                  {coach.certification && (
+                  {coach.clientCount != null && (
+                    <span className="rounded-full bg-white/5 px-2 py-0.5 text-slate-300">👥 {coach.clientCount} متدرب</span>
+                  )}
+                  {(coach.certifications ?? []).map((c, i) => (
+                    <span key={i} className="flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5 text-slate-300">
+                      <Award className="h-3 w-3" /> {c.typeOther || c.type}
+                    </span>
+                  ))}
+                  {(!coach.certifications || coach.certifications.length === 0) && coach.certification && (
                     <span className="flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5 text-slate-300">
                       <Award className="h-3 w-3" /> {coach.certification}
                     </span>
@@ -256,9 +267,8 @@ export function PremiumPage() {
                 {availableCoaches.map((c) => (
                   <button
                     key={c.id}
-                    onClick={() => handleChooseCoach(c.id)}
-                    disabled={choosingId !== null}
-                    className="flex w-full items-center gap-4 rounded-xl border border-white/10 bg-bg p-3 text-right transition-all hover:border-brand-purple/50 hover:bg-brand-purple/5 disabled:opacity-50"
+                    onClick={() => setDetailCoach(c)}
+                    className="flex w-full items-center gap-4 rounded-xl border border-white/10 bg-bg p-3 text-right transition-all hover:border-brand-purple/50 hover:bg-brand-purple/5"
                   >
                     <CoachAvatar src={c.profileImage} name={c.name} size={48} />
                     <div className="flex-1">
@@ -266,11 +276,10 @@ export function PremiumPage() {
                       <p className="text-xs text-slate-500">
                         متخصص في: {c.specialty}
                         {c.yearsExperience != null && ` · ${c.yearsExperience} سنوات خبرة`}
+                        {c.clientCount != null && ` · 👥 ${c.clientCount} متدرب`}
                       </p>
                     </div>
-                    {choosingId === c.id
-                      ? <Loader2 className="h-5 w-5 animate-spin text-brand-purple" />
-                      : <span className="rounded-full bg-brand-purple/20 px-3 py-1 text-xs font-bold text-brand-purple">اختيار</span>}
+                    <span className="rounded-full bg-brand-purple/20 px-3 py-1 text-xs font-bold text-brand-purple">التفاصيل</span>
                   </button>
                 ))}
               </div>
@@ -367,6 +376,16 @@ export function PremiumPage() {
             الدفع آمن عبر Stripe — وضع تجريبي، استخدم البطاقة 4242 4242 4242 4242
           </p>
         </div>
+      )}
+
+      {/* Coach detail popup — opened from the picker, choose from inside it */}
+      {detailCoach && (
+        <CoachDetailModal
+          coach={detailCoach}
+          choosing={choosingId === detailCoach.id}
+          onChoose={() => handleChooseCoach(detailCoach.id)}
+          onClose={() => setDetailCoach(null)}
+        />
       )}
     </div>
   );

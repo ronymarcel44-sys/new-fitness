@@ -28,7 +28,9 @@ import { ChatPage }           from "@/pages/ChatPage";
 import { ProgressPage }       from "@/pages/ProgressPage";
 import { WeeklyPlanPage }     from "@/pages/WeeklyPlanPage";
 import { ExerciseDetailPage } from "@/pages/ExerciseDetailPage";
+import { GoalDetailsPage }    from "@/pages/GoalDetailsPage"; // NEW (goal redesign)
 import { PremiumPage }        from "@/pages/PremiumPage";
+import { ProfilePage }        from "@/pages/ProfilePage";
 
 // Admin Pages
 import { AdminLayout }        from "@/pages/admin/AdminLayout";
@@ -120,6 +122,8 @@ export default function App() {
         <Route path="/nutrition"   element={<PrivateRoute><AppLayout><NutritionPage /></AppLayout></PrivateRoute>} />
         <Route path="/chat"        element={<PrivateRoute><AppLayout><ChatPage /></AppLayout></PrivateRoute>} />
         <Route path="/progress"    element={<PrivateRoute><AppLayout><ProgressPage /></AppLayout></PrivateRoute>} />
+        <Route path="/profile"     element={<PrivateRoute><AppLayout><ProfilePage /></AppLayout></PrivateRoute>} />
+        <Route path="/goal-details" element={<PrivateRoute><AppLayout><GoalDetailsPage /></AppLayout></PrivateRoute>} /> {/* NEW (goal redesign) */}
         <Route path="/weekly-plan" element={<PrivateRoute><AppLayout><WeeklyPlanPage /></AppLayout></PrivateRoute>} />
         <Route path="/premium"     element={<PrivateRoute><AppLayout><PremiumPage /></AppLayout></PrivateRoute>} />
         <Route path="/exercise/:dayName/:exerciseId"

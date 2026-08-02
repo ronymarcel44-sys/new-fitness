@@ -21,6 +21,7 @@
 import { Router, Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import { prisma }       from "../lib/prisma";
+import { normalizeCertifications } from "../lib/certs";
 import { authenticate } from "../middleware/auth";
 import { requireRole }  from "../middleware/role";
 
@@ -138,6 +139,7 @@ router.get("/coaches", async (_req: Request, res: Response): Promise<void> => {
     bio:             c.bio,
     yearsExperience: c.yearsExperience,
     certification:   c.certification,
+    certifications:  normalizeCertifications(c.certifications),
     assignedUsers:   c.assignments.map((a) => a.userId),
   })));
 });

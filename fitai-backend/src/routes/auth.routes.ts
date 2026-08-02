@@ -13,6 +13,7 @@ import { Router, Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import { prisma } from "../lib/prisma";
 import { signAccessToken, signRefreshToken, verifyToken } from "../lib/jwt";
+import { normalizeCertifications } from "../lib/certs";
 
 const router = Router();
 
@@ -61,10 +62,17 @@ router.post("/register", async (req: Request, res: Response): Promise<void> => {
 // On success the coach is logged in immediately and lands on the "under review"
 // screen (the frontend gates the dashboard on status).
 router.post("/register-coach", async (req: Request, res: Response): Promise<void> => {
-  const { name, email, password, specialty, bio, yearsExperience, certification } = req.body;
+  const { name, email, password, specialty, bio, yearsExperience, certifications } = req.body;
 
   if (!name || !email || !password || !specialty) {
     res.status(400).json({ error: "Name, email, password, and specialty are required" });
+    return;
+  }
+
+  // At least one complete certificate (type + number) is required for self-registration.
+  const certs = normalizeCertifications(certifications);
+  if (certs.length === 0) {
+    res.status(400).json({ error: "At least one certificate (type + number) is required" });
     return;
   }
 
@@ -91,7 +99,7 @@ router.post("/register-coach", async (req: Request, res: Response): Promise<void
       status:          "pending",
       bio:             bio || null,
       yearsExperience: yearsExperience != null && yearsExperience !== "" ? Number(yearsExperience) : null,
-      certification:   certification || null,
+      certifications:  certs,
     },
     select: { id: true, name: true, email: true },
   });

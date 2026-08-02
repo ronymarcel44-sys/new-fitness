@@ -7,12 +7,17 @@
 
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { Dumbbell, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Dumbbell, Eye, EyeOff, Loader2, Plus, X } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { registerCoachThunk, clearError } from "@/features/auth/authSlice";
+import { CERT_TYPES } from "@/lib/constants";
 import type { CoachSpecialty } from "@/types";
 
 const SPECIALTIES: CoachSpecialty[] = ["قوة عضلية", "تخسيس", "لياقة عامة"];
+
+// One editable certificate row in the form
+type CertRow = { type: string; number: string; typeOther: string };
+const emptyCert = (): CertRow => ({ type: CERT_TYPES[0], number: "", typeOther: "" });
 
 export function CoachRegisterPage() {
   const dispatch = useAppDispatch();
@@ -23,10 +28,21 @@ export function CoachRegisterPage() {
   const [form, setForm] = useState({
     name: "", email: "", password: "", confirm: "",
     specialty: SPECIALTIES[0] as CoachSpecialty,
-    bio: "", yearsExperience: "", certification: "",
+    bio: "", yearsExperience: "",
   });
+  const [certs,      setCerts]      = useState<CertRow[]>([emptyCert()]);
   const [showPass,   setShowPass]   = useState(false);
   const [localError, setLocalError] = useState("");
+
+  // Certificate row helpers
+  const updateCert = (i: number, patch: Partial<CertRow>) =>
+    setCerts((rows) => rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+  const addCert    = () => setCerts((rows) => [...rows, emptyCert()]);
+  const removeCert = (i: number) => setCerts((rows) => rows.filter((_, idx) => idx !== i));
+
+  // A row is complete when it has a number, plus a real name for the "أخرى" case
+  const certComplete = (c: CertRow) =>
+    c.number.trim() !== "" && (c.type !== "أخرى" || c.typeOther.trim() !== "");
 
   // After register succeeds (role becomes "coach") → go to the coach area
   useEffect(() => {
@@ -44,7 +60,9 @@ export function CoachRegisterPage() {
     if (!form.name.trim())              { setLocalError("الاسم مطلوب"); return; }
     if (form.password.length < 6)       { setLocalError("كلمة المرور يجب أن تكون 6 أحرف على الأقل"); return; }
     if (form.password !== form.confirm) { setLocalError("كلمة المرور غير متطابقة"); return; }
-    if (!form.certification.trim())     { setLocalError("بيانات الشهادة مطلوبة للتحقق"); return; }
+
+    const validCerts = certs.filter(certComplete);
+    if (validCerts.length === 0) { setLocalError("أضف شهادة واحدة على الأقل (النوع والرقم)"); return; }
 
     dispatch(registerCoachThunk({
       name:            form.name,
@@ -53,7 +71,11 @@ export function CoachRegisterPage() {
       specialty:       form.specialty,
       bio:             form.bio,
       yearsExperience: form.yearsExperience,
-      certification:   form.certification,
+      certifications:  validCerts.map((c) => ({
+        type:   c.type,
+        number: c.number.trim(),
+        ...(c.type === "أخرى" && { typeOther: c.typeOther.trim() }),
+      })),
     }));
   };
 
@@ -137,12 +159,51 @@ export function CoachRegisterPage() {
                 placeholder="مثال: 5" className="input-base" />
             </div>
 
-            {/* Certification */}
+            {/* Certificates — one or more (type + number) */}
             <div>
-              <label className="mb-1.5 block text-xs font-semibold text-slate-400">الشهادة / رقم الترخيص *</label>
-              <input type="text" value={form.certification}
-                onChange={(e) => setForm({ ...form, certification: e.target.value })}
-                placeholder="مثال: شهادة مدرب معتمد ISSA — رقم 12345" className="input-base" />
+              <label className="mb-1.5 block text-xs font-semibold text-slate-400">الشهادات / التراخيص *</label>
+              <p className="mb-2 text-[11px] text-slate-500">أضف شهاداتك المعتمدة — النوع ورقمها. الرقم يُستخدم للتحقق فقط ولا يظهر للمتدربين.</p>
+
+              <div className="space-y-2.5">
+                {certs.map((c, i) => (
+                  <div key={i} className="rounded-xl border border-white/10 bg-bg/40 p-2.5">
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={c.type}
+                        onChange={(e) => updateCert(i, { type: e.target.value })}
+                        className="input-base w-32 shrink-0"
+                      >
+                        {CERT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                      <input
+                        type="text" value={c.number}
+                        onChange={(e) => updateCert(i, { number: e.target.value })}
+                        placeholder="رقم الشهادة" className="input-base flex-1"
+                      />
+                      {certs.length > 1 && (
+                        <button type="button" onClick={() => removeCert(i)}
+                          className="shrink-0 rounded-lg border border-white/10 p-2 text-slate-500 transition-colors hover:border-red-500/40 hover:text-red-400"
+                          aria-label="حذف الشهادة">
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                    {c.type === "أخرى" && (
+                      <input
+                        type="text" value={c.typeOther}
+                        onChange={(e) => updateCert(i, { typeOther: e.target.value })}
+                        placeholder="اسم الشهادة (مثال: مدرب تغذية معتمد)"
+                        className="input-base mt-2"
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <button type="button" onClick={addCert}
+                className="mt-2.5 flex items-center gap-1.5 text-xs font-semibold text-accent transition-colors hover:text-accent/80">
+                <Plus className="h-3.5 w-3.5" /> إضافة شهادة أخرى
+              </button>
             </div>
 
             {/* Bio */}

@@ -3,13 +3,18 @@
 // and a profile photo (uploaded from device, shrunk to ~256px, stored as base64).
 
 import { useState, useRef, useEffect } from "react";
-import { Camera, Save, Loader2, CheckCircle2 } from "lucide-react";
+import { Camera, Save, Loader2, CheckCircle2, Plus, X } from "lucide-react";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { updateCoachProfileThunk } from "@/features/coach/coachSlice";
 import { CoachAvatar } from "@/components/coach/CoachAvatar";
+import { CERT_TYPES } from "@/lib/constants";
 import type { CoachSpecialty } from "@/types";
 
 const SPECIALTIES: CoachSpecialty[] = ["قوة عضلية", "تخسيس", "لياقة عامة"];
+
+// One editable certificate row
+type CertRow = { type: string; number: string; typeOther: string };
+const emptyCert = (): CertRow => ({ type: CERT_TYPES[0], number: "", typeOther: "" });
 
 // Shrink an image file to a small square-ish base64 data URL for storage
 function resizeImage(file: File, max = 256): Promise<string> {
@@ -43,12 +48,21 @@ export function CoachProfile() {
 
   const [form, setForm] = useState({
     name: "", bio: "", specialty: SPECIALTIES[0] as string,
-    yearsExperience: "", certification: "",
+    yearsExperience: "",
   });
+  const [certs, setCerts]   = useState<CertRow[]>([emptyCert()]);
   const [image, setImage]   = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved]   = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Certificate row helpers
+  const updateCert = (i: number, patch: Partial<CertRow>) =>
+    setCerts((rows) => rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+  const addCert    = () => setCerts((rows) => [...rows, emptyCert()]);
+  const removeCert = (i: number) => setCerts((rows) => rows.filter((_, idx) => idx !== i));
+  const certComplete = (c: CertRow) =>
+    c.number.trim() !== "" && (c.type !== "أخرى" || c.typeOther.trim() !== "");
 
   // Pre-fill once the coach profile loads
   useEffect(() => {
@@ -58,8 +72,12 @@ export function CoachProfile() {
         bio:             me.bio ?? "",
         specialty:       me.specialty,
         yearsExperience: me.yearsExperience != null ? String(me.yearsExperience) : "",
-        certification:   me.certification ?? "",
       });
+      setCerts(
+        me.certifications && me.certifications.length > 0
+          ? me.certifications.map((c) => ({ type: c.type, number: c.number, typeOther: c.typeOther ?? "" }))
+          : [emptyCert()],
+      );
       setImage(me.profileImage ?? null);
     }
   }, [me]);
@@ -77,7 +95,15 @@ export function CoachProfile() {
   const handleSave = async () => {
     setSaving(true);
     setSaved(false);
-    await dispatch(updateCoachProfileThunk({ ...form, profileImage: image ?? "" }));
+    await dispatch(updateCoachProfileThunk({
+      ...form,
+      certifications: certs.filter(certComplete).map((c) => ({
+        type:   c.type,
+        number: c.number.trim(),
+        ...(c.type === "أخرى" && { typeOther: c.typeOther.trim() }),
+      })),
+      profileImage: image ?? "",
+    }));
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
@@ -129,10 +155,40 @@ export function CoachProfile() {
           </div>
         </div>
 
-        {/* الشهادة */}
+        {/* الشهادات */}
         <div>
-          <label className="mb-1.5 block text-xs font-semibold text-slate-400">الشهادة / رقم الترخيص</label>
-          <input value={form.certification} onChange={(e) => setForm({ ...form, certification: e.target.value })} className="input-base" />
+          <label className="mb-1.5 block text-xs font-semibold text-slate-400">الشهادات / التراخيص</label>
+          <p className="mb-2 text-[11px] text-slate-500">الرقم يُستخدم للتحقق فقط ولا يظهر للمتدربين.</p>
+
+          <div className="space-y-2.5">
+            {certs.map((c, i) => (
+              <div key={i} className="rounded-xl border border-white/10 bg-bg/40 p-2.5">
+                <div className="flex items-center gap-2">
+                  <select value={c.type} onChange={(e) => updateCert(i, { type: e.target.value })} className="input-base w-32 shrink-0">
+                    {CERT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                  <input type="text" value={c.number} onChange={(e) => updateCert(i, { number: e.target.value })}
+                    placeholder="رقم الشهادة" className="input-base flex-1" />
+                  {certs.length > 1 && (
+                    <button type="button" onClick={() => removeCert(i)}
+                      className="shrink-0 rounded-lg border border-white/10 p-2 text-slate-500 transition-colors hover:border-red-500/40 hover:text-red-400"
+                      aria-label="حذف الشهادة">
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+                {c.type === "أخرى" && (
+                  <input type="text" value={c.typeOther} onChange={(e) => updateCert(i, { typeOther: e.target.value })}
+                    placeholder="اسم الشهادة (مثال: مدرب تغذية معتمد)" className="input-base mt-2" />
+                )}
+              </div>
+            ))}
+          </div>
+
+          <button type="button" onClick={addCert}
+            className="mt-2.5 flex items-center gap-1.5 text-xs font-semibold text-accent transition-colors hover:text-accent/80">
+            <Plus className="h-3.5 w-3.5" /> إضافة شهادة أخرى
+          </button>
         </div>
 
         {/* النبذة */}

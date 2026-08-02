@@ -38,6 +38,15 @@ function getSetReps(repsStr: string, setIdx: number): string {
 function hasEquipmentWeight(weightStr: string): boolean {
   return !!weightStr && weightStr !== "وزن الجسم" && weightStr !== "";
 }
+
+// أثقل وزن سيت مقرَّر من نص مثل "20/25/30/30 كغ" → 30. يرجع null لتمارين وزن
+// الجسم أو الفارغة (لا يوجد وزن نسجّله). يُستخدم للتسجيل التلقائي عند إنهاء التمرين.
+function topSetWeight(weightStr?: string): number | null {
+  if (!weightStr || weightStr === "وزن الجسم") return null;
+  const nums = weightStr.match(/\d+(?:\.\d+)?/g)?.map(Number);
+  if (!nums || nums.length === 0) return null;
+  return Math.max(...nums);
+}
 const API_KEY   = import.meta.env.VITE_RAPIDAPI_KEY;
 
 const RAPI_HEADERS = {
@@ -155,17 +164,23 @@ export function ExerciseDetailPage() {
     if (!hasMounted.current) { hasMounted.current = true; return; }
     if (!exercise || isPastDay) return;
     if (totalSets > 0 && completedSets.length === totalSets && !exercise.done) {
-      // NEW (Task 6) — was a direct dispatch; now opens the required weight
-      // prompt like the other two entry points, instead of assuming a value.
-      // markActiveTodayThunk moved into confirmLog() below — firing it here
-      // would count the day as active even if the user cancels the modal.
-      setLoggingExercise(exercise);
+      // Auto-log on completion — no weight prompt. Weighted exercises record the
+      // heaviest prescribed set; bodyweight exercises record no weight at all.
+      logStrengthDone(exercise);
     }
   }, [completedSets.length]);
 
-  // NEW (Task 6) — called by LogExerciseModal once a valid value is entered.
-  // Shared by: all-sets-completed auto-trigger, the manual skip button, and
-  // the cardio completion button below.
+  // Mark a strength exercise done without a prompt — auto-records the heaviest
+  // prescribed set weight (null for bodyweight exercises like push-ups).
+  function logStrengthDone(ex: Exercise) {
+    const w = topSetWeight(ex.weight);
+    const payload = w != null ? { actualWeightKg: w } : {};
+    dispatch(toggleDone({ day, exerciseId: ex.id, ...payload }));
+    dispatch(toggleDoneThunk({ exerciseId: ex.id, done: true, ...payload }));
+    dispatch(markActiveTodayThunk());
+  }
+
+  // Called by LogExerciseModal (cardio only now) once a valid duration is entered.
   function confirmLog(value: number) {
     if (!loggingExercise) return;
     const isCardio = loggingExercise.exerciseType === "cardio";
@@ -572,7 +587,7 @@ export function ExerciseDetailPage() {
           {/* إنجاز يدوي للتمرين كاملاً */}
           {!exercise.done && completedSets.length < totalSets && (
             <div className="border-t border-white/5 px-4 pb-4">
-                <button onClick={() => setLoggingExercise(exercise)}
+                <button onClick={() => logStrengthDone(exercise)}
                 className="mt-3 w-full rounded-xl border border-white/10 py-2.5 text-xs text-slate-500 transition-all hover:border-white/20 hover:text-slate-300">
                 تخطي هذا التمرين
               </button>

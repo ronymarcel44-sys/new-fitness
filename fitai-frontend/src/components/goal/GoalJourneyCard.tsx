@@ -22,7 +22,7 @@ import { ConfirmedGoalCard } from "./ConfirmedGoalCard"; // NEW (Task 6)
 
 const CONSISTENCY_GOALS = ["strength", "endurance", "general_fitness"];
 
-export function GoalJourneyCard() {
+export function GoalJourneyCard({ view = "primary" }: { view?: "primary" | "supporting" }) {
   const dispatch = useAppDispatch();
   const { profile }                                  = useAppSelector((s) => s.user);
   const { weightData, waistData, streak, goalSummary } = useAppSelector((s) => s.progress);
@@ -36,8 +36,12 @@ export function GoalJourneyCard() {
   // users (goalConfirmedByAI still false) fall through to the unchanged code
   // below, so nothing breaks for anyone who hasn't done the new onboarding.
   if (profile.goalConfirmedByAI && goalSummary) {
-    return <ConfirmedGoalCard goal={goal} summary={goalSummary} streak={streak} />;
+    return <ConfirmedGoalCard goal={goal} summary={goalSummary} streak={streak} view={view} />;
   }
+
+  // Legacy / unconfirmed accounts have no supporting split — their fallback
+  // journey card belongs only on the main tab.
+  if (view === "supporting") return null;
 
   // ── Consistency goals: the streak card above is their journey; show a flavor card.
   if (isConsistencyGoal(goal)) {
