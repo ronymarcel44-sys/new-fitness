@@ -21,6 +21,30 @@ import { MeasurementsProgressCard } from "@/components/goal/MeasurementsProgress
 import { celebrate } from "@/features/celebration/celebrationSlice";
 import { isWeightGoal, goalDirection, autoTargetWeight, computeMilestones } from "@/lib/goalTracker";
 
+// Landing-style line-art icons (thin stroke, palette colors) — no emojis.
+function DumbbellIcon({ color }: { color: string }) {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none">
+      <path d="M6.5 8v8M4 9.5v5M17.5 8v8M20 9.5v5M6.5 12h11" stroke={color} strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+function FlameIcon({ color }: { color: string }) {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none">
+      <path d="M12 3c1 3 4 4.2 4 8a4 4 0 0 1-8 0c0-1.6.7-2.4 1.3-3.1C10.5 7 11 5 12 3Z" stroke={color} strokeWidth="1.6" strokeLinejoin="round" />
+    </svg>
+  );
+}
+function ChartIcon({ color }: { color: string }) {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
+      <polyline points="3,17 9,11 13,14 21,5" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <line x1="3" y1="21" x2="21" y2="21" stroke={color} strokeWidth="1.6" strokeLinecap="round" opacity="0.4" />
+    </svg>
+  );
+}
+
 const tooltipStyle = {
   backgroundColor: "#111827", border: "1px solid rgba(255,255,255,0.1)",
   borderRadius: 10, color: "#F1F5F9", fontFamily: "Tajawal, sans-serif",
@@ -208,7 +232,7 @@ export function ProgressPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-6 pb-20 pt-28">
-      <h1 className="mb-2 text-4xl font-black">التقدم 📊</h1>
+      <h1 className="mb-2 text-4xl font-black">التقدّم</h1>
       <p className="mb-8 text-slate-400">عدّل قياساتك وسيُبلَّغ الـ AI تلقائياً ليقترح تعديلات على خطتك</p>
 
       <>
@@ -238,17 +262,22 @@ export function ProgressPage() {
             ? <GoalJourneyCard view="primary" />
             : <GoalJourneyCard view="supporting" />}
 
-          {/* Summary cards — main tab */}
+          {/* Summary tiles — main tab (HUD stat tiles with line-art icons) */}
           {tab === "main" && (
-          <div className="mb-6 grid gap-4 sm:grid-cols-3">
+          <div className="mb-6 grid gap-3 sm:grid-cols-3">
             {[
-              { label: "الوزن الابتدائي", val: `${profile.startWeight || weightData[0]?.weight || profile.weight || "—"} كغ`, color: "text-slate-300" },
-              { label: "الوزن الحالي",    val: `${profile.weight || weightData[weightData.length - 1]?.weight || "—"} كغ`, color: "text-accent" },
-              { label: "أطول سلسلة",     val: `${bestStreak} يوم`, color: "text-brand-orange" },
-            ].map(({ label, val, color }) => (
-              <Card key={label}>
-                <p className="mb-1 text-sm text-slate-500">{label}</p>
-                <p className={`text-3xl font-black ${color}`}>{val}</p>
+              { icon: <DumbbellIcon color="#94a3b8" />, tint: "rgba(255,255,255,0.04)", ring: "rgba(255,255,255,0.10)", label: "الوزن الابتدائي", val: `${profile.startWeight || weightData[0]?.weight || profile.weight || "—"} كغ`, color: "text-slate-200" },
+              { icon: <DumbbellIcon color="#00E5A0" />, tint: "rgba(0,229,160,0.08)", ring: "rgba(0,229,160,0.25)", label: "الوزن الحالي",    val: `${profile.weight || weightData[weightData.length - 1]?.weight || "—"} كغ`, color: "text-accent" },
+              { icon: <FlameIcon color="#FF6B35" />,    tint: "rgba(255,107,53,0.08)", ring: "rgba(255,107,53,0.25)", label: "أطول سلسلة",      val: `${bestStreak} يوم`, color: "text-brand-orange" },
+            ].map(({ icon, tint, ring, label, val, color }) => (
+              <Card key={label} className="flex items-center gap-3">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border" style={{ background: tint, borderColor: ring }}>
+                  {icon}
+                </span>
+                <div className="min-w-0">
+                  <p className="mb-0.5 truncate text-xs text-slate-500">{label}</p>
+                  <p className={`text-2xl font-black ${color}`}>{val}</p>
+                </div>
               </Card>
             ))}
           </div>
@@ -257,14 +286,25 @@ export function ProgressPage() {
           {/* Weight chart — main tab */}
           {tab === "main" && chartData.length > 1 && (
             <Card className="mb-6">
-              <h3 className="mb-5 font-bold">منحنى الوزن (كغ) ⚖️</h3>
+              <h3 className="mb-5 flex items-center gap-2 font-bold">
+                <span className="grid h-8 w-8 place-items-center rounded-lg border border-accent/20" style={{ background: "rgba(0,229,160,0.08)" }}>
+                  <ChartIcon color="#00E5A0" />
+                </span>
+                منحنى الوزن (كغ)
+              </h3>
               <ResponsiveContainer width="100%" height={220}>
                 <LineChart data={chartData}>
+                  <defs>
+                    <linearGradient id="weightLine" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="#3B82F6" />
+                      <stop offset="100%" stopColor="#00E5A0" />
+                    </linearGradient>
+                  </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                   <XAxis dataKey="week" stroke="#4B5563" tick={{ fill: "#4B5563", fontFamily: "Tajawal", fontSize: 12 }} />
                   <YAxis stroke="#4B5563" tick={{ fill: "#4B5563", fontFamily: "Tajawal", fontSize: 12 }} />
                   <Tooltip contentStyle={tooltipStyle} />
-                  <Line type="monotone" dataKey="weight" stroke="#00E5A0" strokeWidth={2.5} dot={{ fill: "#00E5A0", r: 4 }} />
+                  <Line type="monotone" dataKey="weight" stroke="url(#weightLine)" strokeWidth={3} dot={{ fill: "#00E5A0", r: 4 }} activeDot={{ r: 6 }} />
                 </LineChart>
               </ResponsiveContainer>
             </Card>

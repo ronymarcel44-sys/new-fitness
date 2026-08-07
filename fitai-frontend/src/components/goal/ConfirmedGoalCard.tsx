@@ -138,28 +138,35 @@ export function ConfirmedGoalCard({
       role="button"
       aria-label="عرض تفاصيل هدفك"
     >
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Target className="h-5 w-5 text-accent" />
-          <h3 className="font-bold">رحلة هدفك — {getGoalLabel(goal)}</h3>
-        </div>
+      <div className="mb-2 flex items-center justify-between">
+        <h3 className="text-sm font-bold text-slate-300">رحلة هدفك — {getGoalLabel(goal)}</h3>
         <ChevronLeft className="h-5 w-5 text-slate-500" />
       </div>
 
-      {/* Overall — equal-weight average of every metric, per goal-tracking-redesign-plan.md A4 */}
-      <div className="mb-2 flex items-center justify-between">
-        <span className="text-sm font-bold text-slate-300">التقدّم الكلي</span>
-        <span className="text-lg font-black text-accent">{overallPct}%</span>
-      </div>
-      <div className="h-3 w-full overflow-hidden rounded-full bg-white/5">
+      {/* HUD ring — overall progress (equal-weight avg of primary metrics, plan A4) */}
+      <div className="flex flex-col items-center pb-1 pt-2">
         <div
-          className="h-full rounded-full bg-accent transition-all duration-700"
-          style={{ width: `${overallPct}%` }}
-        />
+          className="relative grid h-[190px] w-[190px] place-items-center rounded-full transition-all duration-700"
+          style={{
+            background: `conic-gradient(#00E5A0 0% ${overallPct}%, rgba(255,255,255,0.06) ${overallPct}% 100%)`,
+            filter: "drop-shadow(0 0 24px rgba(0,229,160,0.28))",
+          }}
+        >
+          <div
+            className="absolute inset-[13px] rounded-full"
+            style={{ background: "radial-gradient(circle at 50% 32%, #131a2c, #0b1020)" }}
+          />
+          <div className="relative text-center">
+            <div className="text-[52px] font-black leading-none">
+              {overallPct}<span className="text-2xl text-accent">%</span>
+            </div>
+            <div className="mt-1.5 text-xs font-bold text-slate-500">التقدّم الكلي</div>
+          </div>
+        </div>
+        <p className="mt-4 max-w-xs text-center text-sm leading-relaxed text-slate-300">
+          {motivationMessage(overallPct, overallPct >= 100, streak)}
+        </p>
       </div>
-      <p className="mt-3 text-sm text-slate-300">
-        {motivationMessage(overallPct, overallPct >= 100, streak)}
-      </p>
 
       <div className="my-4 border-t border-white/5" />
 

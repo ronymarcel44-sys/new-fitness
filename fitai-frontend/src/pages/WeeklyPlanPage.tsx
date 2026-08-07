@@ -2,7 +2,7 @@ import { Lock } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
-import { toggleDone, toggleDayType, toggleDayTypeThunk, setSelectedDay } from "@/features/workout/workoutSlice";
+import { toggleDone, setSelectedDay } from "@/features/workout/workoutSlice";
 import { DAYS_ORDER, type DayName } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -111,23 +111,8 @@ export function WeeklyPlanPage() {
               )}
             </div>
 
-            {/* زر تبديل نوع اليوم — متاح فقط لليوم والمستقبل */}
-            {DAYS_ORDER.indexOf(selectedDay) >= TODAY_IDX ? (
-              <button
-                onClick={() => {
-                  const newType = selectedDayData.type === "تمرين" ? "راحة" : "تمرين";
-                  dispatch(toggleDayType(selectedDay));            // instant UI flip
-                  dispatch(toggleDayTypeThunk({ day: selectedDay, type: newType })); // persist
-                }}
-                className={cn(
-                  "rounded-full border px-4 py-1.5 text-xs font-semibold transition-all",
-                  selectedDayData.type === "راحة"
-                    ? "border-white/10 text-slate-500 hover:border-accent/30 hover:text-accent"
-                    : "border-accent/30 bg-accent/10 text-accent hover:bg-accent/20"
-                )}>
-                {selectedDayData.type === "راحة" ? "🛌 تحويل لتمرين" : "💪 تحويل لراحة"}
-              </button>
-            ) : (
+            {/* أيام الأسبوع ثابتة: 5 تمرين + يومان راحة — لا يمكن تبديل نوع اليوم */}
+            {DAYS_ORDER.indexOf(selectedDay) < TODAY_IDX && (
               <span className="flex items-center gap-1.5 text-xs text-slate-600">
                 <Lock className="h-3 w-3" /> يوم مضى
               </span>

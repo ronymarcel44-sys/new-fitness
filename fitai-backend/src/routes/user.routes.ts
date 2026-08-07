@@ -130,6 +130,7 @@ router.put("/me", async (req: Request, res: Response): Promise<void> => {
       gender: true, height: true, startBodyFatPct: true,
       goal: true, // needed to know which auto-calc branch applies below
       fitnessLevel: true, // NEW — drives the level-based muscle-gain lean ratio
+      mainTargetBodyFatPct: true, // NEW — so recomp can backfill a target if the AI gave none
     },
   });
 
@@ -205,15 +206,31 @@ router.put("/me", async (req: Request, res: Response): Promise<void> => {
       autoTargetLeanMass = Math.round((startLean + leanRatio * weightGain) * 10) / 10;
     }
   }
-  if (effectiveGoal === "body_recomposition" && mainTargetBodyFatPct !== undefined) {
+  // Recomp safety net: the AI sometimes mis-frames recomposition as a weight goal
+  // and leaves the body-fat target empty. When the goal is recomp and there's no
+  // target yet, auto-derive one — current bodyfat − 3, floored at a healthy
+  // athletic level (~10% men / 18% women) — so the goal is always trackable.
+  const incomingBF =
+    mainTargetBodyFatPct !== undefined && mainTargetBodyFatPct !== null && mainTargetBodyFatPct !== ""
+      ? Number(mainTargetBodyFatPct) : undefined;
+  let recompFallbackBF: number | undefined;
+  if (effectiveGoal === "body_recomposition" && incomingBF === undefined && existing?.mainTargetBodyFatPct == null) {
+    const curBF = liveBodyFatPct ?? existing?.startBodyFatPct;
+    if (curBF != null) {
+      const floor = finalGender === "female" ? 18 : 10;
+      recompFallbackBF = Math.max(floor, Math.round((curBF - 3) * 10) / 10);
+    }
+  }
+  const effectiveTargetBF = incomingBF ?? recompFallbackBF;
+
+  if (effectiveGoal === "body_recomposition" && effectiveTargetBF !== undefined) {
     const currentWeightVal = weight !== undefined ? Number(weight) : existing?.weight;
     const currentBFVal     = liveBodyFatPct ?? existing?.startBodyFatPct;
     if (currentWeightVal != null && currentBFVal != null) {
       const currentLean = currentWeightVal * (1 - currentBFVal / 100);
       autoTargetLeanMass = Math.round(currentLean * 1.03 * 10) / 10; // aim for ~+3% lean (recomp = fat down, muscle up)
-      const mtbf = Number(mainTargetBodyFatPct);
-      if (mtbf < 100) {
-        autoMainTargetWeight = Math.round((currentLean / (1 - mtbf / 100)) * 10) / 10;
+      if (effectiveTargetBF < 100) {
+        autoMainTargetWeight = Math.round((currentLean / (1 - effectiveTargetBF / 100)) * 10) / 10;
       }
     }
   }
@@ -241,6 +258,8 @@ router.put("/me", async (req: Request, res: Response): Promise<void> => {
       // actually included it, so a plain Number() is safe here)
       ...(mainTargetWeight        !== undefined && { mainTargetWeight:        Number(mainTargetWeight) }),
       ...(mainTargetBodyFatPct    !== undefined && { mainTargetBodyFatPct:    Number(mainTargetBodyFatPct) }),
+      // Recomp fallback body-fat target (only when the AI supplied none)
+      ...(recompFallbackBF !== undefined && mainTargetBodyFatPct === undefined && { mainTargetBodyFatPct: recompFallbackBF }),
       ...(mainTargetBenchPress    !== undefined && { mainTargetBenchPress:    Number(mainTargetBenchPress) }),
       ...(mainTargetSquat         !== undefined && { mainTargetSquat:         Number(mainTargetSquat) }),
       ...(mainTargetDeadlift      !== undefined && { mainTargetDeadlift:      Number(mainTargetDeadlift) }),
