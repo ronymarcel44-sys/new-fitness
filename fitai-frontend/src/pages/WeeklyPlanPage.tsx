@@ -83,7 +83,8 @@ export function WeeklyPlanPage() {
               {isPast && <Lock className="absolute top-1.5 right-1.5 h-2.5 w-2.5 text-slate-600" />}
               <span className="text-base">{DAY_EMOJIS[day]}</span>
               <span className="mt-1 font-bold">{day}</span>
-              {isToday && <span className="mt-0.5 text-[10px] text-accent">اليوم</span>}
+              {isToday && isRest && <span className="mt-0.5 text-[10px] text-slate-600">اليوم · راحة</span>}
+              {isToday && !isRest && <span className="mt-0.5 text-[10px] text-accent">اليوم</span>}
               {!isToday && (
                 <span className={cn("mt-0.5 text-[10px]", isRest ? "text-slate-600" : "text-slate-500")}>
                   {isRest ? "راحة" : `${weeklyPlan[day]?.exercises?.length ?? 0} تمارين`}
@@ -102,11 +103,14 @@ export function WeeklyPlanPage() {
             <div>
               <h2 className="text-xl font-black">
                 {selectedDay}
-                {selectedDay === TODAY && (
+                {selectedDay === TODAY && selectedDayData.type === "راحة" && (
+                  <span className="mr-2 rounded-full border border-white/10 bg-bg-card px-2 py-0.5 text-xs text-slate-400">اليوم · راحة</span>
+                )}
+                {selectedDay === TODAY && selectedDayData.type !== "راحة" && (
                   <span className="mr-2 rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-xs text-accent">اليوم</span>
                 )}
               </h2>
-              {selectedDayData.focus && (
+              {selectedDayData.type === "تمرين" && selectedDayData.focus && (
                 <p className="text-sm text-slate-400">التركيز: {selectedDayData.focus}</p>
               )}
             </div>

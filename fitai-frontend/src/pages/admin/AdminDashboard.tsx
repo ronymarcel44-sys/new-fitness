@@ -82,9 +82,8 @@ export function AdminDashboard() {
             ))}
           </div>
 
-          <div className="mt-6 pt-4 border-t border-white/10 grid grid-cols-2 gap-3">
-            <button onClick={() => navigate("/admin/users")}    className="bg-accent/10 hover:bg-accent/20 text-accent rounded-xl py-2 text-sm font-medium transition-colors">إدارة المستخدمين</button>
-            <button onClick={() => navigate("/admin/settings")} className="bg-white/5 hover:bg-white/10 text-slate-300 rounded-xl py-2 text-sm font-medium transition-colors">إعدادات AI</button>
+          <div className="mt-6 pt-4 border-t border-white/10">
+            <button onClick={() => navigate("/admin/users")} className="bg-accent/10 hover:bg-accent/20 text-accent rounded-xl py-2 text-sm font-medium transition-colors">إدارة المستخدمين</button>
           </div>
         </div>
       </div>

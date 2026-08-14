@@ -37,10 +37,8 @@ import { AdminLayout }        from "@/pages/admin/AdminLayout";
 import { AdminDashboard }     from "@/pages/admin/AdminDashboard";
 import { AdminUsers }         from "@/pages/admin/AdminUsers";
 import { AdminUserDetail }    from "@/pages/admin/AdminUserDetail";
-import { AdminExercises }     from "@/pages/admin/AdminExercises";
 import { AdminCoaches }       from "@/pages/admin/AdminCoaches";
 import { AdminSubscriptions } from "@/pages/admin/AdminSubscriptions";
-import { AdminSettings }      from "@/pages/admin/AdminSettings";
 
 // Coach Pages
 import { CoachLayout }        from "@/pages/coach/CoachLayout";
@@ -133,10 +131,10 @@ export default function App() {
         <Route path="/admin"               element={<AdminRoute><AdminLayout><AdminDashboard /></AdminLayout></AdminRoute>} />
         <Route path="/admin/users"         element={<AdminRoute><AdminLayout><AdminUsers /></AdminLayout></AdminRoute>} />
         <Route path="/admin/users/:id"     element={<AdminRoute><AdminLayout><AdminUserDetail /></AdminLayout></AdminRoute>} />
-        <Route path="/admin/exercises"     element={<AdminRoute><AdminLayout><AdminExercises /></AdminLayout></AdminRoute>} />
+        {/* Admin exercises removed */}
         <Route path="/admin/coaches"       element={<AdminRoute><AdminLayout><AdminCoaches /></AdminLayout></AdminRoute>} />
         <Route path="/admin/subscriptions" element={<AdminRoute><AdminLayout><AdminSubscriptions /></AdminLayout></AdminRoute>} />
-        <Route path="/admin/settings"      element={<AdminRoute><AdminLayout><AdminSettings /></AdminLayout></AdminRoute>} />
+        {/* Admin settings removed */}
 
         {/* Coach — Protected */}
         <Route path="/coach"           element={<CoachRoute><CoachLayout><CoachDashboard /></CoachLayout></CoachRoute>} />

@@ -8,10 +8,10 @@ import { ADMIN_NAV_LINKS } from "@/lib/constants";
 const NAV_ICONS: Record<string, string> = {
   "/admin":               "📊",
   "/admin/users":         "👥",
-  "/admin/exercises":     "🏋️",
+ // "/admin/exercises":     "🏋️",
   "/admin/coaches":       "🎯",
   "/admin/subscriptions": "💳",
-  "/admin/settings":      "⚙️",
+  // settings removed
 };
 
 export function AdminSidebar() {

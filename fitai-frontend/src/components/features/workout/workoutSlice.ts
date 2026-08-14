@@ -13,6 +13,8 @@ import { apiRequest } from "@/lib/api";
 import type { WorkoutPlan, WeeklyPlan, DayName, Exercise } from "@/types";
 import { DAYS_ORDER } from "@/types";
 
+const REST_DAYS: DayName[] = ["الثلاثاء", "السبت"];
+
 // Shape of one exercise row as the backend stores and returns it
 interface BackendExercise {
   id:          string;
@@ -60,13 +62,19 @@ function backendToWeeklyPlan(plan: BackendPlan): WeeklyPlan {
     const day = ex.dayOfWeek as DayName;
     if (!weekly[day]) return;
 
+    const isRestDay = REST_DAYS.includes(day);
+    if (isRestDay) {
+      weekly[day].type = "راحة";
+      weekly[day].focus = "";
+      return;
+    }
+
     // Mark the day as training if any of its rows are training.
     if (ex.dayType === "training") {
       weekly[day].type = "تمرين";
     }
-    // Capture focus from the first row that has one — including rest days, so a
-    // rest day keeps its focus label when it's switched to training after a reload.
-    if (!weekly[day].focus && ex.focus) {
+    // Capture focus only for training days.
+    if (weekly[day].type === "تمرين" && !weekly[day].focus && ex.focus) {
       weekly[day].focus = ex.focus;
     }
 
@@ -208,12 +216,12 @@ const workoutSlice = createSlice({
         state.weeklyPlan = weeklyPlan;
       } else if (exercises && exercises.length > 0) {
         // Legacy: old AI responses sent a flat exercises array instead of weeklyPlan
-        const trainingDays: DayName[] = ["الأحد", "الاثنين", "الأربعاء", "الخميس"];
-        const restDays:     DayName[] = ["الثلاثاء", "الجمعة", "السبت"];
+        const trainingDays: DayName[] = ["الأحد", "الاثنين", "الأربعاء", "الخميس", "الجمعة"];
+        const restDays: DayName[] = ["الثلاثاء", "السبت"];
         const perDay = Math.ceil(exercises.length / trainingDays.length);
-        const plan   = {} as WeeklyPlan;
+        const plan = {} as WeeklyPlan;
         trainingDays.forEach((day, i) => {
-          const slice   = exercises.slice(i * perDay, (i + 1) * perDay);
+          const slice = exercises.slice(i * perDay, (i + 1) * perDay);
           const muscles = [...new Set(slice.map((e) => e.muscleGroup).filter(Boolean))];
           plan[day] = { type: "تمرين", focus: muscles.join(" و") || "تمارين متنوعة", exercises: slice };
         });

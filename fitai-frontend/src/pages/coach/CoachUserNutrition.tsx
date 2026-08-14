@@ -13,11 +13,13 @@ import {
   removeCoachMealThunk,
 } from "@/features/coach/coachSlice";
 import { apiRequest } from "@/lib/api";
-
+/////////////////////no edit
 // Shape of a meal row as returned by GET /coach/users/:id/nutrition
 interface BackendMeal {
   id:          string;
   mealName:    string;
+  mealType:    string;
+  dayOfWeek:   string | null;
   mealTime:    string;
   calories:    number;
   proteinG:    number;
@@ -35,7 +37,7 @@ interface MealEdit {
 }
 
 export function CoachUserNutrition() {
-  const [searchParams] = useSearchParams();
+  const [searchParams] = useSearchParams(); 
   const dispatch       = useAppDispatch();
   const userId         = searchParams.get("user") ?? "";
 
@@ -136,6 +138,20 @@ export function CoachUserNutrition() {
 
   const plan  = selectedUserNutrition;
   const meals: BackendMeal[] = plan?.meals ?? [];
+
+  const dayOrder = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+  const mealTypeOrder = ["breakfast", "lunch", "dinner", "snack", "pre_workout"];
+
+  const groupedMeals = dayOrder.map((day) => ({
+    day,
+    items: meals
+      .filter((meal) => (meal.dayOfWeek ?? "الأحد") === day)
+      .sort((a, b) => {
+        const aIndex = mealTypeOrder.indexOf(a.mealType || "breakfast");
+        const bIndex = mealTypeOrder.indexOf(b.mealType || "breakfast");
+        return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
+      }),
+  })).filter((group) => group.items.length > 0);
 
   const getNoteFor = (mealId: string) =>
     (mealNotes[userId] || []).find((n) => n.mealId === mealId)?.noteText ?? "";
@@ -331,140 +347,144 @@ export function CoachUserNutrition() {
             )}
           </div>
 
-          {/* قائمة الوجبات */}
-          <div className="space-y-3">
-            {meals.map((meal) => {
-              const existingNote = getNoteFor(meal.id);
-              const isExpanded   = expandedMeal === meal.id;
+          {/* قائمة الوجبات مجمعة حسب اليوم */}
+          <div className="space-y-4">
+            {groupedMeals.map(({ day, items }) => (
+              <div key={day} className="space-y-3">
+                <h3 className="px-1 text-sm font-black text-accent">{day}</h3>
 
-              return (
-                <div key={meal.id} className="card">
-                  {/* معلومات الوجبة */}
-                  <div
-                    className="flex cursor-pointer items-start justify-between"
-                    onClick={() => setExpandedMeal(isExpanded ? null : meal.id)}
-                  >
-                    <div className="flex items-start gap-3">
-                      <span className="text-2xl">{meal.emoji}</span>
-                      <div>
-                        <p className="font-bold text-white">
-                          {meal.mealName}
-                          {meal.coachEdited && <span className="mr-2 text-xs font-normal text-brand-purple">✨ معدّلة</span>}
-                        </p>
-                        <p className="text-xs text-slate-500">{meal.mealTime} · {meal.calories} kcal</p>
-                        <div className="mt-0.5 flex gap-3 text-xs text-slate-600">
-                          <span>بروتين {meal.proteinG}g</span>
-                          <span>كارب {meal.carbsG}g</span>
-                          <span>دهون {meal.fatG}g</span>
-                        </div>
-                        {existingNote && !isExpanded && (
-                          <p className="mt-1 text-xs text-brand-purple">
-                            💬 {existingNote.slice(0, 60)}{existingNote.length > 60 ? "..." : ""}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleDeleteMeal(meal.id); }}
-                        className="rounded-lg p-1 text-slate-600 transition-colors hover:text-red-400"
-                        title="حذف الوجبة"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                      <button className="text-slate-600 hover:text-slate-300">
-                        {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </div>
+                {items.map((meal) => {
+                  const existingNote = getNoteFor(meal.id);
+                  const isExpanded = expandedMeal === meal.id;
 
-                  {/* قسم التعديل + الملاحظة — يظهر عند التوسيع */}
-                  {isExpanded && (
-                    <div className="mt-4 border-t border-white/10 pt-4">
-                      {/* تعديل تفاصيل الوجبة */}
-                      <p className="mb-2 text-xs font-semibold text-slate-300">✏️ تعديل الوجبة</p>
-                      <div className="mb-3 grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="mb-1 block text-[10px] text-slate-500">اسم الوجبة</label>
-                          <input value={editFor(meal).mealName} onChange={(e) => setEditField(meal, "mealName", e.target.value)} className="input-base w-full py-1.5 text-sm" />
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-[10px] text-slate-500">الوقت</label>
-                          <input value={editFor(meal).mealTime} onChange={(e) => setEditField(meal, "mealTime", e.target.value)} className="input-base w-full py-1.5 text-sm" />
-                        </div>
-                      </div>
-                      <div className="mb-2">
-                        <label className="mb-1 block text-[10px] text-slate-500">المكونات (افصل بينها بفاصلة)</label>
-                        <textarea value={editFor(meal).items} onChange={(e) => setEditField(meal, "items", e.target.value)} rows={2} className="input-base w-full resize-none py-1.5 text-sm" />
-                      </div>
-                      <button
-                        onClick={() => handleAnalyzeEdit(meal)}
-                        disabled={editAnalyzingId === meal.id}
-                        className="mb-3 flex items-center gap-1.5 rounded-xl border border-brand-purple/30 bg-brand-purple/10 px-3 py-1.5 text-xs font-bold text-brand-purple transition-all hover:bg-brand-purple/20 disabled:opacity-40"
+                  return (
+                    <div key={meal.id} className="card">
+                      <div
+                        className="flex cursor-pointer items-start justify-between"
+                        onClick={() => setExpandedMeal(isExpanded ? null : meal.id)}
                       >
-                        {editAnalyzingId === meal.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                        إعادة تحليل القيم بالـ AI
-                      </button>
-                      {/* القيم الغذائية — يحسبها الـ AI (للعرض) */}
-                      <div className="mb-3 grid grid-cols-4 gap-2">
-                        {([
-                          ["calories", "سعرات",  "text-brand-orange"],
-                          ["proteinG", "بروتين", "text-accent"],
-                          ["carbsG",   "كارب",   "text-brand-blue"],
-                          ["fatG",     "دهون",   "text-brand-purple"],
-                        ] as const).map(([field, label, color]) => (
-                          <div key={field} className="rounded-xl border border-white/5 bg-bg p-2 text-center">
-                            <p className={`text-lg font-black ${color}`}>{editFor(meal)[field] || 0}</p>
-                            <p className="text-[10px] text-slate-500">{label}</p>
+                        <div className="flex items-start gap-3">
+                          <span className="text-2xl">{meal.emoji}</span>
+                          <div>
+                            <p className="font-bold text-white">
+                              {meal.mealName}
+                              {meal.coachEdited && <span className="mr-2 text-xs font-normal text-brand-purple">✨ معدّلة</span>}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              {meal.mealType || "meal"} · {meal.mealTime} · {meal.calories} kcal
+                            </p>
+                            <div className="mt-0.5 flex gap-3 text-xs text-slate-600">
+                              <span>بروتين {meal.proteinG}g</span>
+                              <span>كارب {meal.carbsG}g</span>
+                              <span>دهون {meal.fatG}g</span>
+                            </div>
+                            {existingNote && !isExpanded && (
+                              <p className="mt-1 text-xs text-brand-purple">
+                                💬 {existingNote.slice(0, 60)}{existingNote.length > 60 ? "..." : ""}
+                              </p>
+                            )}
                           </div>
-                        ))}
-                      </div>
-                      <button
-                        onClick={() => handleSaveEdit(meal)}
-                        className="mb-4 flex items-center gap-1.5 rounded-xl border border-brand-purple/30 bg-brand-purple/10 px-3 py-1.5 text-xs font-bold text-brand-purple transition-all hover:bg-brand-purple/20"
-                      >
-                        <Save className="h-3.5 w-3.5" /> حفظ التعديلات
-                      </button>
-
-                      <div className="mb-2 flex items-center gap-2 border-t border-white/10 pt-4">
-                        <MessageSquarePlus className="h-4 w-4 text-brand-purple" />
-                        <p className="text-xs font-semibold text-slate-300">ملاحظة المدرب</p>
-                      </div>
-
-                      {existingNote && (
-                        <div className="mb-3 flex items-start justify-between rounded-xl border border-brand-purple/20 bg-brand-purple/5 px-3 py-2">
-                          <p className="text-sm text-slate-300 leading-relaxed">{existingNote}</p>
+                        </div>
+                        <div className="flex items-center gap-1">
                           <button
-                            onClick={() => handleRemoveNote(meal.id)}
-                            className="mr-3 shrink-0 text-slate-600 hover:text-red-400"
+                            onClick={(e) => { e.stopPropagation(); handleDeleteMeal(meal.id); }}
+                            className="rounded-lg p-1 text-slate-600 transition-colors hover:text-red-400"
+                            title="حذف الوجبة"
                           >
-                            <X className="h-3.5 w-3.5" />
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                          <button className="text-slate-600 hover:text-slate-300">
+                            {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                           </button>
                         </div>
-                      )}
-
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={noteInputs[meal.id] ?? ""}
-                          onChange={(e) => setNoteInputs((prev) => ({ ...prev, [meal.id]: e.target.value }))}
-                          placeholder={existingNote ? "تعديل الملاحظة..." : "اكتب ملاحظة لهذه الوجبة..."}
-                          className="input-base flex-1 py-2 text-sm"
-                        />
-                        <button
-                          onClick={() => handleSaveNote(meal.id)}
-                          disabled={!noteInputs[meal.id]?.trim()}
-                          className="flex items-center gap-1.5 rounded-xl border border-accent/30 bg-accent/10 px-3 py-2 text-xs font-bold text-accent transition-all hover:bg-accent/20 disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          <Save className="h-3.5 w-3.5" />
-                          حفظ
-                        </button>
                       </div>
+
+                      {isExpanded && (
+                        <div className="mt-4 border-t border-white/10 pt-4">
+                          <p className="mb-2 text-xs font-semibold text-slate-300">✏️ تعديل الوجبة</p>
+                          <div className="mb-3 grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="mb-1 block text-[10px] text-slate-500">اسم الوجبة</label>
+                              <input value={editFor(meal).mealName} onChange={(e) => setEditField(meal, "mealName", e.target.value)} className="input-base w-full py-1.5 text-sm" />
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-[10px] text-slate-500">الوقت</label>
+                              <input value={editFor(meal).mealTime} onChange={(e) => setEditField(meal, "mealTime", e.target.value)} className="input-base w-full py-1.5 text-sm" />
+                            </div>
+                          </div>
+                          <div className="mb-2">
+                            <label className="mb-1 block text-[10px] text-slate-500">المكونات (افصل بينها بفاصلة)</label>
+                            <textarea value={editFor(meal).items} onChange={(e) => setEditField(meal, "items", e.target.value)} rows={2} className="input-base w-full resize-none py-1.5 text-sm" />
+                          </div>
+                          <button
+                            onClick={() => handleAnalyzeEdit(meal)}
+                            disabled={editAnalyzingId === meal.id}
+                            className="mb-3 flex items-center gap-1.5 rounded-xl border border-brand-purple/30 bg-brand-purple/10 px-3 py-1.5 text-xs font-bold text-brand-purple transition-all hover:bg-brand-purple/20 disabled:opacity-40"
+                          >
+                            {editAnalyzingId === meal.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                            إعادة تحليل القيم بالـ AI
+                          </button>
+                          <div className="mb-3 grid grid-cols-4 gap-2">
+                            {([
+                              ["calories", "سعرات",  "text-brand-orange"],
+                              ["proteinG", "بروتين", "text-accent"],
+                              ["carbsG",   "كارب",   "text-brand-blue"],
+                              ["fatG",     "دهون",   "text-brand-purple"],
+                            ] as const).map(([field, label, color]) => (
+                              <div key={field} className="rounded-xl border border-white/5 bg-bg p-2 text-center">
+                                <p className={`text-lg font-black ${color}`}>{editFor(meal)[field] || 0}</p>
+                                <p className="text-[10px] text-slate-500">{label}</p>
+                              </div>
+                            ))}
+                          </div>
+                          <button
+                            onClick={() => handleSaveEdit(meal)}
+                            className="mb-4 flex items-center gap-1.5 rounded-xl border border-brand-purple/30 bg-brand-purple/10 px-3 py-1.5 text-xs font-bold text-brand-purple transition-all hover:bg-brand-purple/20"
+                          >
+                            <Save className="h-3.5 w-3.5" /> حفظ التعديلات
+                          </button>
+
+                          <div className="mb-2 flex items-center gap-2 border-t border-white/10 pt-4">
+                            <MessageSquarePlus className="h-4 w-4 text-brand-purple" />
+                            <p className="text-xs font-semibold text-slate-300">ملاحظة المدرب</p>
+                          </div>
+
+                          {existingNote && (
+                            <div className="mb-3 flex items-start justify-between rounded-xl border border-brand-purple/20 bg-brand-purple/5 px-3 py-2">
+                              <p className="text-sm text-slate-300 leading-relaxed">{existingNote}</p>
+                              <button
+                                onClick={() => handleRemoveNote(meal.id)}
+                                className="mr-3 shrink-0 text-slate-600 hover:text-red-400"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          )}
+
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={noteInputs[meal.id] ?? ""}
+                              onChange={(e) => setNoteInputs((prev) => ({ ...prev, [meal.id]: e.target.value }))}
+                              placeholder={existingNote ? "تعديل الملاحظة..." : "اكتب ملاحظة لهذه الوجبة..."}
+                              className="input-base flex-1 py-2 text-sm"
+                            />
+                            <button
+                              onClick={() => handleSaveNote(meal.id)}
+                              disabled={!noteInputs[meal.id]?.trim()}
+                              className="flex items-center gap-1.5 rounded-xl border border-accent/30 bg-accent/10 px-3 py-2 text-xs font-bold text-accent transition-all hover:bg-accent/20 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              <Save className="h-3.5 w-3.5" />
+                              حفظ
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              );
-            })}
+                  );
+                })}
+              </div>
+            ))}
           </div>
         </>
       )}

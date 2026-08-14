@@ -54,7 +54,7 @@ export function MeasurementsProgressCard() {
               <span className="text-lg">{r.emoji}</span>
               <span className="w-16 shrink-0 text-sm font-semibold text-slate-300">{r.label}</span>
               <span className="flex-1 text-sm text-slate-400">
-                {hasStart ? <>{r.start} <span className="text-slate-600">→</span> {r.current} سم</> : <>{r.current} سم</>}
+                {hasStart ? <>{r.current} <span className="text-slate-600">→</span> {r.start} سم</> : <>{r.current} سم</>}
               </span>
               <span className={cn("shrink-0 text-sm font-bold", color)}>
                 {hasStart ? `${arrow} ${delta === 0 ? "" : Math.abs(delta)}`.trim() : "— البداية"}

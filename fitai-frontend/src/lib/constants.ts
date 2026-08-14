@@ -51,10 +51,8 @@ export const NAV_LINKS = [
 export const ADMIN_NAV_LINKS = [
   { path: "/admin",               label: "لوحة التحكم" },
   { path: "/admin/users",         label: "المستخدمون"   },
-  { path: "/admin/exercises",     label: "التمارين"     },
   { path: "/admin/coaches",       label: "المدربون"     },
   { path: "/admin/subscriptions", label: "الاشتراكات"   },
-  { path: "/admin/settings",      label: "الإعدادات"    },
 ];
 
 // ── Landing ───────────────────────────────────────────────────────

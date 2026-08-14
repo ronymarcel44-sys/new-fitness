@@ -10,7 +10,7 @@ import { NotificationBell } from "@/components/notifications/NotificationBell";
 // ملاحظة: خطة التمارين/التغذية والتقدم والمحادثة تُفتح لكل متدرب من بطاقته في
 // صفحة "مستخدموي" (تحتاج ?user=)، لذلك لا توضع كروابط عامة في الشريط الجانبي.
 const COACH_NAV = [
-  { path: "/coach",            label: "مستخدموي",        icon: Users      },
+  { path: "/coach",            label: "المتدربين",        icon: Users      },
   { path: "/coach/earnings",   label: "الأرباح",         icon: Wallet     },
   { path: "/coach/profile",    label: "ملفي الشخصي",     icon: UserCircle },
 ];
