@@ -78,63 +78,107 @@ export function AdminUsers() {
         </select>
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto rounded-2xl border border-white/10">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-white/10 bg-white/5">
-              {["المستخدم","الإيميل","الباقة","الحالة","السلسلة","آخر نشاط","إجراءات"].map((h) => (
-                <th key={h} className="text-right p-4 text-slate-400 font-medium">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 ? (
-              <tr><td colSpan={7} className="text-center p-8 text-slate-500">لا توجد نتائج</td></tr>
-            ) : filtered.map((user) => (
-              <tr key={user.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                <td className="p-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center text-xs font-bold text-accent">
-                      {user.name.charAt(0)}
-                    </div>
-                    <span className="text-white font-medium">{user.name}</span>
-                  </div>
-                </td>
-                <td className="p-4 text-slate-400">{user.email}</td>
-                <td className="p-4">
-                  <button onClick={() => handleTogglePlan(user)}
-                    className={`text-xs px-3 py-1 rounded-full font-medium transition-colors ${
-                      user.plan === "premium" ? "bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30" : "bg-slate-700 text-slate-400 hover:bg-slate-600"
-                    }`}>
-                    {user.plan === "premium" ? "💎 بريميوم" : "مجاني"}
-                  </button>
-                </td>
-                <td className="p-4">
-                  <span className={`text-xs px-3 py-1 rounded-full ${
-                    user.status === "active" ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"
-                  }`}>
-                    {user.status === "active" ? "● نشط" : "● موقوف"}
-                  </span>
-                </td>
-                <td className="p-4 text-slate-300">🔥 {user.streak} يوم</td>
-                <td className="p-4 text-slate-500">{user.lastActive}</td>
-                <td className="p-4">
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => handleView(user)} className="text-xs bg-accent/10 hover:bg-accent/20 text-accent px-3 py-1.5 rounded-lg transition-colors">عرض</button>
-                    <button onClick={() => handleToggleStatus(user)}
-                      className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
-                        user.status === "active" ? "bg-red-500/10 hover:bg-red-500/20 text-red-400" : "bg-green-500/10 hover:bg-green-500/20 text-green-400"
-                      }`}>
-                      {user.status === "active" ? "إيقاف" : "تفعيل"}
-                    </button>
-                    <button onClick={() => setDeleteTarget(user)} className="text-xs bg-white/5 hover:bg-red-500/10 text-slate-500 hover:text-red-400 px-3 py-1.5 rounded-lg transition-colors">حذف</button>
-                  </div>
-                </td>
+      {/* Table (desktop) + Card list (mobile) */}
+      <div className="rounded-2xl border border-white/10">
+        {/* Desktop table */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/10 bg-white/5">
+                {['المستخدم','الإيميل','الباقة','الحالة','السلسلة','آخر نشاط','إجراءات'].map((h) => (
+                  <th key={h} className="text-right p-4 text-slate-400 font-medium">{h}</th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filtered.length === 0 ? (
+                <tr><td colSpan={7} className="text-center p-8 text-slate-500">لا توجد نتائج</td></tr>
+              ) : filtered.map((user) => (
+                <tr key={user.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                  <td className="p-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center text-xs font-bold text-accent">
+                        {user.name.charAt(0)}
+                      </div>
+                      <span className="text-white font-medium">{user.name}</span>
+                    </div>
+                  </td>
+                  <td className="p-4 text-slate-400">{user.email}</td>
+                  <td className="p-4">
+                    <button onClick={() => handleTogglePlan(user)}
+                      className={`text-xs px-3 py-1 rounded-full font-medium transition-colors ${
+                        user.plan === 'premium' ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
+                      }`}>
+                      {user.plan === 'premium' ? '💎 بريميوم' : 'مجاني'}
+                    </button>
+                  </td>
+                  <td className="p-4">
+                    <span className={`text-xs px-3 py-1 rounded-full ${
+                      user.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                    }`}>
+                      {user.status === 'active' ? '● نشط' : '● موقوف'}
+                    </span>
+                  </td>
+                  <td className="p-4 text-slate-300">🔥 {user.streak} يوم</td>
+                  <td className="p-4 text-slate-500">{user.lastActive}</td>
+                  <td className="p-4">
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => handleView(user)} className="text-xs bg-accent/10 hover:bg-accent/20 text-accent px-3 py-1.5 rounded-lg transition-colors">عرض</button>
+                      <button onClick={() => handleToggleStatus(user)}
+                        className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
+                          user.status === 'active' ? 'bg-red-500/10 hover:bg-red-500/20 text-red-400' : 'bg-green-500/10 hover:bg-green-500/20 text-green-400'
+                        }`}>
+                        {user.status === 'active' ? 'إيقاف' : 'تفعيل'}
+                      </button>
+                      <button onClick={() => setDeleteTarget(user)} className="text-xs bg-white/5 hover:bg-red-500/10 text-slate-500 hover:text-red-400 px-3 py-1.5 rounded-lg transition-colors">حذف</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Mobile cards */}
+        <div className="md:hidden p-3 space-y-3">
+          {filtered.length === 0 ? (
+            <div className="text-center p-6 text-slate-500">لا توجد نتائج</div>
+          ) : filtered.map((user) => (
+            <div key={user.id} className="bg-bg-card/40 rounded-2xl p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center text-sm font-bold text-accent">{user.name.charAt(0)}</div>
+                  <div>
+                    <div className="text-white font-medium">{user.name}</div>
+                    <div className="text-slate-400 text-sm">{user.email}</div>
+                  </div>
+                </div>
+                <div className="text-slate-300 text-sm">{user.lastActive}</div>
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button onClick={() => handleTogglePlan(user)}
+                  className={`text-xs px-3 py-1 rounded-full font-medium transition-colors ${
+                    user.plan === 'premium' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-slate-700 text-slate-400'
+                  }`}>
+                  {user.plan === 'premium' ? '💎 بريميوم' : 'مجاني'}
+                </button>
+
+                <span className={`text-xs px-3 py-1 rounded-full ${user.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                  {user.status === 'active' ? '● نشط' : '● موقوف'}
+                </span>
+
+                <span className="text-xs px-3 py-1 rounded-full text-slate-300">🔥 {user.streak} يوم</span>
+              </div>
+
+              <div className="mt-3 flex items-center gap-2">
+                <button onClick={() => handleView(user)} className="flex-1 text-sm bg-accent/10 hover:bg-accent/20 text-accent px-3 py-2 rounded-lg">عرض</button>
+                <button onClick={() => handleToggleStatus(user)} className={`flex-1 text-sm px-3 py-2 rounded-lg ${user.status === 'active' ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20' : 'bg-green-500/10 text-green-400 hover:bg-green-500/20'}`}>{user.status === 'active' ? 'إيقاف' : 'تفعيل'}</button>
+                <button onClick={() => setDeleteTarget(user)} className="flex-1 text-sm bg-white/5 hover:bg-red-500/10 text-slate-500 hover:text-red-400 px-3 py-2 rounded-lg">حذف</button>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Delete confirmation modal */}
