@@ -50,6 +50,7 @@ export const NAV_LINKS = [
 // ── Admin Nav ─────────────────────────────────────────────────────
 export const ADMIN_NAV_LINKS = [
   { path: "/admin",               label: "لوحة التحكم" },
+  { path: "/admin/profit",        label: "الأرباح" },
   { path: "/admin/users",         label: "المستخدمون"   },
   { path: "/admin/coaches",       label: "المدربون"     },
   { path: "/admin/subscriptions", label: "الاشتراكات"   },

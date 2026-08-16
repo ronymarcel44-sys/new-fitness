@@ -4,9 +4,11 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { logout } from "@/features/auth/authSlice";
 import { ADMIN_NAV_LINKS } from "@/lib/constants";
+import { X } from "lucide-react";
 
 const NAV_ICONS: Record<string, string> = {
   "/admin":               "📊",
+  "/admin/profit":        "💰",
   "/admin/users":         "👥",
  // "/admin/exercises":     "🏋️",
   "/admin/coaches":       "🎯",
@@ -14,7 +16,7 @@ const NAV_ICONS: Record<string, string> = {
   // settings removed
 };
 
-export function AdminSidebar() {
+export function AdminSidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void } = {}) {
   const dispatch   = useAppDispatch();
   const navigate   = useNavigate();
   const { displayName } = useAppSelector((s) => s.auth);
@@ -25,8 +27,10 @@ export function AdminSidebar() {
     navigate("/login");
   };
 
+  // Desktop sidebar (md+). Mobile drawer is rendered conditionally when `isOpen`.
   return (
-    <aside className="w-64 min-h-screen bg-bg-card border-l border-white/10 flex flex-col">
+    <>
+      <aside className="hidden md:flex w-64 min-h-screen bg-bg-card border-l border-white/10 flex flex-col">
       {/* Logo */}
       <div className="p-6 border-b border-white/10">
         <div className="flex items-center gap-3">
@@ -78,6 +82,64 @@ export function AdminSidebar() {
           <span>🚪</span> تسجيل الخروج
         </button>
       </div>
-    </aside>
+      </aside>
+
+      {/* Mobile drawer */}
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex md:hidden">
+          <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+          <div className="ml-auto w-72 max-w-full z-50 min-h-screen bg-bg-card border-l border-white/10 flex flex-col p-4">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">🛡️</span>
+                <div>
+                  <p className="font-bold text-accent text-lg leading-none">FitAI</p>
+                  <p className="text-xs text-slate-500 mt-0.5">لوحة الإدارة</p>
+                </div>
+              </div>
+              <button onClick={onClose} className="p-2 rounded-md text-slate-300 hover:bg-white/5">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="px-2 py-2 mb-3">
+              <div className="flex items-center gap-2 bg-accent/10 rounded-xl p-3">
+                <span className="text-xl">👤</span>
+                <div>
+                  <p className="text-sm font-semibold text-white leading-none">{displayName}</p>
+                  <p className="text-xs text-accent mt-0.5">مدير النظام</p>
+                </div>
+              </div>
+            </div>
+
+            <nav className="flex-1 flex flex-col gap-2 overflow-auto">
+              {ADMIN_NAV_LINKS.map((link) => (
+                <NavLink
+                  key={link.path}
+                  to={link.path}
+                  end={link.path === "/admin"}
+                  onClick={onClose}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${isActive ? "bg-accent/15 text-accent border border-accent/30" : "text-slate-400 hover:text-white hover:bg-white/5"}`
+                  }
+                >
+                  <span className="text-lg">{NAV_ICONS[link.path]}</span>
+                  {link.label}
+                </NavLink>
+              ))}
+            </nav>
+
+            <div className="mt-3">
+              <button
+                onClick={() => { handleLogout(); onClose?.(); }}
+                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all w-full"
+              >
+                <span>🚪</span> تسجيل الخروج
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

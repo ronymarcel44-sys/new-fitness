@@ -39,6 +39,7 @@ import { AdminUsers }         from "@/pages/admin/AdminUsers";
 import { AdminUserDetail }    from "@/pages/admin/AdminUserDetail";
 import { AdminCoaches }       from "@/pages/admin/AdminCoaches";
 import { AdminSubscriptions } from "@/pages/admin/AdminSubscriptions";
+import { AdminProfit }        from "@/pages/admin/AdminProfit";
 
 // Coach Pages
 import { CoachLayout }        from "@/pages/coach/CoachLayout";
@@ -134,6 +135,7 @@ export default function App() {
         {/* Admin exercises removed */}
         <Route path="/admin/coaches"       element={<AdminRoute><AdminLayout><AdminCoaches /></AdminLayout></AdminRoute>} />
         <Route path="/admin/subscriptions" element={<AdminRoute><AdminLayout><AdminSubscriptions /></AdminLayout></AdminRoute>} />
+        <Route path="/admin/profit"       element={<AdminRoute><AdminLayout><AdminProfit /></AdminLayout></AdminRoute>} />
         {/* Admin settings removed */}
 
         {/* Coach — Protected */}

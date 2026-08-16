@@ -211,4 +211,87 @@ router.put("/settings", (req: Request, res: Response): void => {
   res.json(aiSettings);
 });
 
+// ── Profit report (admin-only) ───────────────────────────────────────────────
+// GET /admin/profit?start=YYYY-MM-DD&end=YYYY-MM-DD
+// Returns daily rows with: date, subscriptionsCount, grossRevenue, stripeFees,
+// refunds (always 0 for now), netProfit, coachShare, adminShare
+router.get("/profit", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const qStart = String(req.query.start || "");
+    const qEnd = String(req.query.end || "");
+
+    const today = new Date();
+    // Default range = last 30 days (including today)
+    let endDate = qEnd ? new Date(qEnd) : today;
+    endDate.setUTCHours(0, 0, 0, 0);
+    let startDate = qStart ? new Date(qStart) : new Date(endDate);
+    if (!qStart) startDate.setUTCDate(endDate.getUTCDate() - 29);
+    startDate.setUTCHours(0, 0, 0, 0);
+
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      res.status(400).json({ error: "Invalid date format" });
+      return;
+    }
+
+    const rows: any[] = [];
+    const DAY_PRICE = 10; // $10 per monthly premium (matches payment.routes pricing)
+
+    // iterate day by day (inclusive)
+    for (let d = new Date(startDate); d <= endDate; d.setUTCDate(d.getUTCDate() + 1)) {
+      const dayStart = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0));
+      const nextDay = new Date(dayStart);
+      nextDay.setUTCDate(dayStart.getUTCDate() + 1);
+
+      // Count users who were upgraded to premium on this day (heuristic: plan === 'premium' and updatedAt in day)
+      const subscriptionsCount = await prisma.user.count({
+        where: {
+          plan: "premium",
+          updatedAt: { gte: dayStart, lt: nextDay },
+        },
+      });
+
+      const grossRevenue = subscriptionsCount * DAY_PRICE;
+      const stripeFees = Number((grossRevenue * 0.029 + subscriptionsCount * 0.3).toFixed(2));
+      const refunds = 0;
+      const netProfit = Number((grossRevenue - stripeFees - refunds).toFixed(2));
+      const coachShare = Number((netProfit * 0.5).toFixed(2));
+      const adminShare = Number((netProfit - coachShare).toFixed(2));
+
+      rows.push({
+        date: dayStart.toISOString().slice(0, 10),
+        subscriptionsCount,
+        grossRevenue,
+        stripeFees,
+        refunds,
+        netProfit,
+        coachShare,
+        adminShare,
+      });
+    }
+
+    // totals
+    const totals = rows.reduce((acc, r) => {
+      acc.subscriptionsCount += r.subscriptionsCount;
+      acc.grossRevenue += r.grossRevenue;
+      acc.stripeFees += r.stripeFees;
+      acc.refunds += r.refunds;
+      acc.netProfit += r.netProfit;
+      acc.coachShare += r.coachShare;
+      acc.adminShare += r.adminShare;
+      return acc;
+    }, { subscriptionsCount: 0, grossRevenue: 0, stripeFees: 0, refunds: 0, netProfit: 0, coachShare: 0, adminShare: 0 });
+
+    // Round totals
+    for (const k of ["grossRevenue", "stripeFees", "refunds", "netProfit", "coachShare", "adminShare"]) {
+      // @ts-ignore
+      totals[k] = Number(totals[k].toFixed ? totals[k].toFixed(2) : totals[k]);
+    }
+
+    res.json({ rows, totals });
+  } catch (err) {
+    console.error("/admin/profit error:", err);
+    res.status(500).json({ error: "Failed to compute profit report" });
+  }
+});
+
 export default router;
