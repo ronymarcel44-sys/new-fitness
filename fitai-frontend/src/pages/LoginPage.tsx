@@ -139,33 +139,6 @@ export function LoginPage() {
               سجّل كمدرب
             </Link>
           </p>
-
-          {/* Demo credentials — now showing emails */}
-          <div className="mt-5 space-y-2">
-            <div className="rounded-xl border border-white/5 bg-white/5 p-3.5 text-xs text-slate-500">
-              <p className="mb-1 font-semibold text-slate-400">حساب مستخدم تجريبي:</p>
-              <p>سجّل حساباً جديداً من صفحة التسجيل</p>
-            </div>
-
-            <div className="rounded-xl border border-brand-orange/20 bg-brand-orange/5 p-3.5 text-xs">
-              <p className="mb-1 font-semibold text-brand-orange">🏋️ حساب المدرب:</p>
-              <p className="text-slate-400">
-                <span className="text-brand-orange">coach@fitai.com</span>
-                {" "}/ <span className="text-brand-orange">coach123</span>
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-brand-purple/20 bg-brand-purple/5 p-3.5 text-xs">
-              <div className="mb-1 flex items-center gap-1.5">
-                <ShieldCheck className="h-3.5 w-3.5 text-brand-purple" />
-                <p className="font-semibold text-brand-purple">حساب المدير:</p>
-              </div>
-              <p className="text-slate-400">
-                <span className="text-brand-purple">admin@fitai.com</span>
-                {" "}/ <span className="text-brand-purple">admin123</span>
-              </p>
-            </div>
-          </div>
         </div>
 
         <p className="mt-6 text-center text-xs text-slate-600">

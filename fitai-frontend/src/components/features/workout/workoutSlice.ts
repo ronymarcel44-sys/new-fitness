@@ -62,19 +62,12 @@ function backendToWeeklyPlan(plan: BackendPlan): WeeklyPlan {
     const day = ex.dayOfWeek as DayName;
     if (!weekly[day]) return;
 
-    const isRestDay = REST_DAYS.includes(day);
-    if (isRestDay) {
-      weekly[day].type = "راحة";
-      weekly[day].focus = "";
-      return;
-    }
-
-    // Mark the day as training if any of its rows are training.
-    if (ex.dayType === "training") {
-      weekly[day].type = "تمرين";
-    }
-    // Capture focus only for training days.
-    if (weekly[day].type === "تمرين" && !weekly[day].focus && ex.focus) {
+    // Any exercise row implies this is a training day for the user.
+    // Do not enforce a fixed REST_DAYS list here — the backend (and coach
+    // view) may return exercises on days that were previously labeled as
+    // rest. Respect backend data so coach and user views stay in sync.
+    weekly[day].type = "تمرين";
+    if (!weekly[day].focus && ex.focus) {
       weekly[day].focus = ex.focus;
     }
 
@@ -213,7 +206,29 @@ const workoutSlice = createSlice({
       const { weeklyPlan, exercises } = action.payload;
 
       if (weeklyPlan) {
-        state.weeklyPlan = weeklyPlan;
+        // Normalize the AI-provided weeklyPlan: ensure every day exists.
+        // AI responses can omit a day which causes the UI counts to be wrong
+        // (neither rest nor training). Fill missing days as rest by default.
+        const normalized = {} as WeeklyPlan;
+        DAYS_ORDER.forEach((day) => {
+          const src = weeklyPlan[day];
+          if (src && src.type === "تمرين") {
+            normalized[day] = {
+              type: "تمرين",
+              focus: src.focus ?? "",
+              exercises: src.exercises ?? [],
+            };
+          } else {
+            // If the source day is explicitly a rest day, keep it rest;
+            // otherwise default to rest so the UI treats missing days as rest.
+            normalized[day] = {
+              type: "راحة",
+              focus: src?.focus ?? "",
+              exercises: src?.exercises ?? [],
+            };
+          }
+        });
+        state.weeklyPlan = normalized;
       } else if (exercises && exercises.length > 0) {
         // Legacy: old AI responses sent a flat exercises array instead of weeklyPlan
         const trainingDays: DayName[] = ["الأحد", "الاثنين", "الأربعاء", "الخميس", "الجمعة"];
