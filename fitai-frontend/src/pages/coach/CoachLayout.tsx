@@ -1,6 +1,6 @@
 // src/pages/coach/CoachLayout.tsx
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Clock, XCircle, PauseCircle, Loader2, LogOut } from "lucide-react";
 import { CoachSidebar } from "@/components/layout/CoachSidebar";
@@ -72,6 +72,7 @@ function CoachGateScreen({ status }: { status: string }) {
 export function CoachLayout({ children }: CoachLayoutProps) {
   const dispatch = useAppDispatch();
   const { me, meLoaded } = useAppSelector((s) => s.coach);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   // Load own verification status first
   useEffect(() => {
@@ -100,8 +101,18 @@ export function CoachLayout({ children }: CoachLayoutProps) {
   // Verified coach → normal portal
   return (
     <div className="min-h-screen bg-bg font-tajawal text-slate-100 flex flex-row-reverse" dir="rtl">
-      <CoachSidebar />
-      <main className="flex-1 overflow-auto p-8">{children}</main>
+      <CoachSidebar isOpen={drawerOpen} onClose={() => setDrawerOpen(false)} />
+      <main className="flex-1 overflow-auto p-4 md:p-8">
+        <div className="mb-4 md:hidden">
+          <button
+            onClick={() => setDrawerOpen(true)}
+            className="inline-flex items-center gap-2 rounded-lg bg-white/5 px-3 py-2 text-sm text-white"
+          >
+            ☰ القائمة
+          </button>
+        </div>
+        {children}
+      </main>
     </div>
   );
 }
