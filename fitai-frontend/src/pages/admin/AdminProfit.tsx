@@ -48,17 +48,19 @@ export function AdminProfit() {
         <p className="mt-1 text-sm text-slate-500">عرض الربح لصافي الاشتراكات — الفترة: آخر 30 يوم افتراضياً</p>
       </div>
 
-      <div className="mb-4 flex gap-2">
-        <div>
-          <label className="text-xs text-slate-400">من</label>
-          <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="input-base ml-2" />
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-end sm:gap-2">
+          <div>
+            <label className="mb-1 block text-xs text-slate-400">من</label>
+            <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="input-base sm:w-auto" />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs text-slate-400">إلى</label>
+            <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="input-base sm:w-auto" />
+          </div>
+          <button onClick={fetchReport} className="col-span-2 rounded-xl bg-accent px-3 py-2 text-sm font-bold text-bg sm:col-span-1">تحديث</button>
         </div>
-        <div>
-          <label className="text-xs text-slate-400">إلى</label>
-          <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="input-base ml-2" />
-        </div>
-        <button onClick={fetchReport} className="rounded-xl bg-accent px-3 py-2 text-sm font-bold text-bg">تحديث</button>
-        <button onClick={downloadCSV} disabled={!rows} className="ml-auto flex items-center gap-2 rounded-xl border px-3 py-2 text-sm">
+        <button onClick={downloadCSV} disabled={!rows} className="flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm">
           <Download className="h-4 w-4" /> تصدير CSV
         </button>
       </div>
