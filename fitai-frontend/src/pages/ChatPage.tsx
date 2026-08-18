@@ -21,6 +21,9 @@ const WELCOME_MSG = `مرحباً! أنا مساعدك الرياضي الذكي
 
 // Shown transiently in the typing bubble while we wait out a rate-limit and retry
 const BUSY_MSG = "لحظة من فضلك… الخدمة مزدحمة قليلاً وسأكمل بعد ثوانٍ ⏳";
+// Shown instead of BUSY_MSG when the wait is long (the plan-build turn can need up
+// to a full minute for the free-tier per-minute token budget to reset).
+const BUILD_MSG = "خطتك قيد الإنشاء 💪 أمهلني لحظات وستظهر خطتك الكاملة... لا تُغلق الصفحة.";
 // Shown as an AI message when the request fails (or the retry also fails)
 const FAIL_MSG = "⚠️ لم أتمكن من الرد الآن، حاول مرة أخرى بعد قليل";
 
@@ -97,21 +100,31 @@ export function ChatPage() {
   }, [messages]);
 
   // Calls the AI; on a rate-limit (429) shows a transient busy notice, waits the
-  // server-advised time (capped at 10s), then retries ONCE. The busy notice is UI
-  // only — it is never added to `messages`, so it costs no tokens on later turns.
+  // server-advised time, then retries — up to 2 times. The wait honors Groq's
+  // Retry-After (the per-minute token window can take up to ~60s to reset, which
+  // is exactly what the big plan-build turn hits), plus a small buffer so the
+  // minute has definitely rolled over. Capping at 10s (the old behavior) made the
+  // retry fire before the budget freed, so the plan-build always failed and the
+  // user had to resend manually. The notice is UI only — never added to
+  // `messages`, so it costs no tokens on later turns.
+  const MAX_RATE_LIMIT_RETRIES = 2;
   const callAIWithRetry = async (history: { role: string; text: string }[]): Promise<string> => {
-    try {
-      return await askGemini(history);
-    } catch (e) {
-      const err = e as { status?: number; retryAfter?: number };
-      if (err?.status === 429) {
-        const waitSec = Math.min(err.retryAfter ?? 8, 10);
-        setRetryNotice(BUSY_MSG);
-        await new Promise((resolve) => setTimeout(resolve, waitSec * 1000));
-        setRetryNotice(null);
-        return await askGemini(history); // one retry; if it throws, the caller shows FAIL_MSG
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await askGemini(history);
+      } catch (e) {
+        const err = e as { status?: number; retryAfter?: number };
+        if (err?.status === 429 && attempt < MAX_RATE_LIMIT_RETRIES) {
+          const waitSec = Math.min(err.retryAfter ?? 8, 65) + 2;
+          // A long wait means the per-minute budget is resetting (plan-build turn);
+          // reassure the user their plan is being built rather than "service busy".
+          setRetryNotice(waitSec > 12 ? BUILD_MSG : BUSY_MSG);
+          await new Promise((resolve) => setTimeout(resolve, waitSec * 1000));
+          setRetryNotice(null);
+          continue; // retry; if attempts run out, the caller shows FAIL_MSG
+        }
+        throw e;
       }
-      throw e;
     }
   };
 

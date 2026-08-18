@@ -27,6 +27,24 @@ const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
 // and never eats into the plan-build output budget. Harmless string param.
 const REASONING_EFFORT = "low";
 
+// Groq's per-minute token budget (TPM). A single request reserves
+// prompt_tokens + max_tokens against this ceiling up front, so if the two
+// together exceed it Groq rejects the request outright ("Request too large").
+// The plan-build turn sizes its output budget against this so the whole request
+// always fits. Override per-tier via GROQ_TPM_LIMIT (paid tiers are far higher).
+const TPM_LIMIT = Number(process.env.GROQ_TPM_LIMIT) || 8000;
+
+// Rough token estimate for sizing the plan-build output budget — no tokenizer
+// dependency. Calibrated against real Groq usage for this mostly-Arabic content
+// (~2.7 chars/token); dividing by 2.6 leans the estimate slightly HIGH, and the
+// per-message framing + priming allowance is added on top, so we never
+// under-count and accidentally push the request over TPM_LIMIT.
+function estimatePromptTokens(systemContent: string, history: ChatMsg[]): number {
+  let chars = systemContent.length;
+  for (const m of history) chars += m.text.length;
+  return Math.ceil(chars / 2.6) + history.length * 4 + 8;
+}
+
 // The plan-building instructions: calculation tables + JSON schema only. Sent
 // ONLY on the plan-build turn (planMode). Trimmed of all interview/conversation
 // content (goal sub-flow, measurements wording, one-question rules) — those live
@@ -349,13 +367,10 @@ router.post("/chat", async (req: Request, res: Response): Promise<void> => {
   });
   const isOnboarding = !userRow?.hasSetup;
 
-  // The plan-build turn needs a big output budget (the full 7-day plan + meals
-  // truncated at 2000). But Groq's free tier has a per-request ceiling (~8k):
-  // prompt_tokens + max_tokens must fit. The slimmed PLAN_BUILDER_PROMPT keeps the
-  // build input small enough that 3000 output fits under that ceiling. Question
-  // turns stay tiny.
-  const planMode  = needsFullTokens(messages, isOnboarding);
-  const maxTokens = planMode ? 3000 : 700;
+  // The plan-build turn needs a big output budget (the full 7-day plan). The
+  // actual max_tokens is computed below, AFTER the prompt is assembled, so it can
+  // be sized against the real prompt length to keep prompt + max_tokens ≤ TPM.
+  const planMode = needsFullTokens(messages, isOnboarding);
 
   // Structured onboarding output is more reliable (valid JSON, Arabic-only, one
   // question at a time) at a lower temperature; keep the coach chat livelier.
@@ -383,6 +398,18 @@ router.post("/chat", async (req: Request, res: Response): Promise<void> => {
       ? `${COACH_PROMPT}\n\n${contextBlock}`
       : COACH_PROMPT;
   }
+
+  // Size the output budget so the whole request always stays within the per-minute
+  // TPM ceiling (prompt + max_tokens ≤ TPM_LIMIT). Question turns are tiny → flat
+  // 700. The plan-build turn takes whatever room is left after the (large) prompt,
+  // capped at 3000 (a full plan never needs more). We take `min(3000, room)` so the
+  // budget can NEVER exceed the room left under the ceiling — guaranteeing the
+  // request is never rejected as "too large". The max(…, 256) is only a floor
+  // against a zero/negative budget; it can only bite on an absurdly long chat
+  // (prompt alone near the whole ceiling), where no full plan could fit anyway.
+  // On a normal conversation this yields the full 3000; a long chat just shrinks it.
+  const planRoom  = TPM_LIMIT - estimatePromptTokens(systemContent, historyToSend) - 200;
+  const maxTokens = planMode ? Math.min(3000, Math.max(256, planRoom)) : 700;
 
   try {
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
