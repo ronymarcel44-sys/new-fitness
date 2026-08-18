@@ -196,7 +196,7 @@ router.delete("/exercises/:id", async (req: Request, res: Response): Promise<voi
 // ── AI Settings ───────────────────────────────────────────────────────────────
 // Kept in-memory for simplicity. Could move to a settings table later.
 let aiSettings = {
-  model:        "llama-3.3-70b-versatile",
+  model:        "openai/gpt-oss-120b",
   maxTokens:    4000,
   temperature:  0.7,
   systemPrompt: "أنت مدرب لياقة بدنية محترف ومتخصص في التغذية الرياضية.",

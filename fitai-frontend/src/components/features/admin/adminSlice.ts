@@ -29,7 +29,7 @@ const initialState: AdminState = {
     totalPlansGenerated: 0, aiCallsToday: 0, aiCallsThisMonth: 0,
   },
   aiSettings: {
-    model:        "llama-3.3-70b-versatile",
+    model:        "openai/gpt-oss-120b",
     maxTokens:    4000,
     temperature:  0.7,
     systemPrompt: "",

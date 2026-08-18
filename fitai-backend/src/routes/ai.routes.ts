@@ -14,6 +14,19 @@ import { buildUserContext }  from "../lib/userContext";
 const router = Router();
 router.use(authenticate);
 
+// The Groq model powering every AI call below. Defined once here so a model
+// swap is a single edit — Groq periodically decommissions models (the previous
+// `llama-3.3-70b-versatile` was removed, which 404'd every request; `allam-2-7b`
+// was tried but its 4096-token context is too small for the plan build and it's
+// too weak to follow the Arabic onboarding script). Override per-environment via
+// GROQ_MODEL in .env without touching code.
+const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
+
+// gpt-oss models "reason" before answering, and those reasoning tokens count
+// against max_tokens. Keep effort low so reasoning stays tiny (~a few tokens)
+// and never eats into the plan-build output budget. Harmless string param.
+const REASONING_EFFORT = "low";
+
 // The plan-building instructions: calculation tables + JSON schema only. Sent
 // ONLY on the plan-build turn (planMode). Trimmed of all interview/conversation
 // content (goal sub-flow, measurements wording, one-question rules) — those live
@@ -93,35 +106,17 @@ const PLAN_BUILDER_PROMPT = `أنت مساعد لياقة بدنية ذكي با
       { "id": "d1e1", "name": "بنش برس", "nameEn": "Bench Press", "exerciseType": "strength", "durationMinutes": null, "sets": "4", "reps": "12/10/8/8", "rest": "90 ثانية", "weight": "20/25/30/30 كغ", "notes": "...", "muscleGroup": "صدر", "done": false },
       { "id": "d1e2", "name": "تفتيح دمبل", "nameEn": "Dumbbell Fly", "exerciseType": "strength", "durationMinutes": null, "sets": "3", "reps": "12/10/10", "rest": "60 ثانية", "weight": "دمبل 8/10/12 كغ", "notes": "...", "muscleGroup": "صدر", "done": false }
     ]},
-    "الاثنين": { "type": "تمرين", "focus": "ظهر", "exercises": [
-      { "id": "d2e1", "name": "سحب أرضي", "nameEn": "Seated Cable Row", "exerciseType": "strength", "durationMinutes": null, "sets": "4", "reps": "12/10/8/8", "rest": "90 ثانية", "weight": "30/35/40/40 كغ", "notes": "...", "muscleGroup": "ظهر", "done": false },
-      { "id": "d2e2", "name": "سحب علوي", "nameEn": "Lat Pulldown", "exerciseType": "strength", "durationMinutes": null, "sets": "3", "reps": "12/10/10", "rest": "60 ثانية", "weight": "35/40/45 كغ", "notes": "...", "muscleGroup": "ظهر", "done": false }
-    ]},
-    "الثلاثاء": { "type": "راحة", "focus": "أرجل", "exercises": [
-      { "id": "d3e1", "name": "سكوات", "nameEn": "Barbell Squat", "exerciseType": "strength", "durationMinutes": null, "sets": "4", "reps": "12/10/8/8", "rest": "120 ثانية", "weight": "40/50/60/60 كغ", "notes": "...", "muscleGroup": "أرجل", "done": false },
-      { "id": "d3e2", "name": "دفع الأرجل", "nameEn": "Leg Press", "exerciseType": "strength", "durationMinutes": null, "sets": "3", "reps": "12/10/10", "rest": "90 ثانية", "weight": "80/90/100 كغ", "notes": "...", "muscleGroup": "أرجل", "done": false }
-    ]},
-    "الأربعاء": { "type": "تمرين", "focus": "كتف", "exercises": [
-      { "id": "d4e1", "name": "ضغط كتف", "nameEn": "Shoulder Press", "exerciseType": "strength", "durationMinutes": null, "sets": "4", "reps": "12/10/8/8", "rest": "90 ثانية", "weight": "20/25/30/30 كغ", "notes": "...", "muscleGroup": "كتف", "done": false },
-      { "id": "d4e2", "name": "رفرفة جانبية", "nameEn": "Lateral Raise", "exerciseType": "strength", "durationMinutes": null, "sets": "3", "reps": "15/12/12", "rest": "60 ثانية", "weight": "دمبل 6/8/8 كغ", "notes": "...", "muscleGroup": "كتف", "done": false }
-    ]},
-    "الخميس": { "type": "تمرين", "focus": "ذراعين", "exercises": [
-      { "id": "d5e1", "name": "مرجحة بايسبس", "nameEn": "Bicep Curl", "exerciseType": "strength", "durationMinutes": null, "sets": "3", "reps": "12/10/10", "rest": "60 ثانية", "weight": "دمبل 10/12/14 كغ", "notes": "...", "muscleGroup": "ذراعين", "done": false },
-      { "id": "d5e2", "name": "ترايسبس بالحبل", "nameEn": "Triceps Pushdown", "exerciseType": "strength", "durationMinutes": null, "sets": "3", "reps": "12/10/10", "rest": "60 ثانية", "weight": "20/25/30 كغ", "notes": "...", "muscleGroup": "ذراعين", "done": false }
-    ]},
     "الجمعة": { "type": "راحة", "focus": "بطن وكارديو", "exercises": [
       { "id": "d6e1", "name": "بلانك", "nameEn": "Plank", "exerciseType": "strength", "durationMinutes": null, "sets": "3", "reps": "45/40/35 ثانية", "rest": "45 ثانية", "weight": "وزن الجسم", "notes": "...", "muscleGroup": "بطن", "done": false },
       { "id": "d6e2", "name": "كارديو", "nameEn": "Treadmill Running", "exerciseType": "cardio", "durationMinutes": 20, "sets": "", "reps": "", "rest": "-", "weight": "", "notes": "...", "muscleGroup": "كارديو", "done": false }
-    ]},
-    "السبت": { "type": "تمرين", "focus": "جسم كامل", "exercises": [
-      { "id": "d7e1", "name": "رفعة ميتة", "nameEn": "Deadlift", "exerciseType": "strength", "durationMinutes": null, "sets": "4", "reps": "8/6/5/5", "rest": "120 ثانية", "weight": "50/60/70/70 كغ", "notes": "...", "muscleGroup": "ظهر وأرجل", "done": false },
-      { "id": "d7e2", "name": "ضغط بوش أب", "nameEn": "Push Up", "exerciseType": "strength", "durationMinutes": null, "sets": "3", "reps": "15/12/10", "rest": "60 ثانية", "weight": "وزن الجسم", "notes": "...", "muscleGroup": "صدر", "done": false }
     ]}
   },
   "nutrition": { "totalCalories": 2200, "protein": 165, "carbs": 220, "fat": 73 },
   "confirmedGoal": { "mainTargetWeight": null, "mainTargetBodyFatPct": null, "mainTargetBenchPress": null, "mainTargetSquat": null, "mainTargetDeadlift": null, "mainTargetOverheadPress": null, "startBench": null, "startSquat": null, "startDeadlift": null, "startOverheadPress": null }
 }
 \`\`\`
+
+⚠️ المثال أعلاه مختصر ويعرض يومين فقط (الأحد كنموذج ليوم تمرين، والجمعة كنموذج ليوم راحة) لتوضيح التنسيق والحقول المطلوبة فقط. في مخرجاتك الفعلية **يجب** أن تُخرج \`weeklyPlan\` كاملةً بكل الأيام السبعة بالترتيب: الأحد، الاثنين، الثلاثاء، الأربعاء، الخميس، الجمعة، السبت — 5 أيام "تمرين" + يومان "راحة" (الجمعة دائماً راحة + يوم آخر غير ملاصق لها)، وكل يوم يحتوي 2-3 تمارين حقيقية داخل "exercises" (بما فيها يوما الراحة). ممنوع الاكتفاء بيومين أو ترك أي يوم ناقصاً.
 
 ### الهدف المؤكَّد في الـ JSON (confirmedGoal):
 حقل confirmedGoal يحوي **مجموعتين منفصلتين تماماً** — عبِّئ كلتيهما، لا واحدة فقط:
@@ -398,7 +393,8 @@ router.post("/chat", async (req: Request, res: Response): Promise<void> => {
         "User-Agent":    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       },
       body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
+        model: GROQ_MODEL,
+        reasoning_effort: REASONING_EFFORT,
         messages: [
           { role: "system", content: systemContent },
           ...historyToSend.map((m) => ({
@@ -488,7 +484,8 @@ router.post("/analyze-meal", async (req: Request, res: Response): Promise<void> 
         "User-Agent":    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       },
       body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
+        model: GROQ_MODEL,
+        reasoning_effort: REASONING_EFFORT,
         messages: [
           { role: "system", content: ANALYZE_PROMPT },
           { role: "user",   content: foodName.trim() },
@@ -553,7 +550,8 @@ router.post("/analyze-full-meal", async (req: Request, res: Response): Promise<v
         "User-Agent":    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       },
       body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
+        model: GROQ_MODEL,
+        reasoning_effort: REASONING_EFFORT,
         messages: [
           { role: "system", content: FULL_MEAL_PROMPT },
           { role: "user",   content: list.join("\n") },
@@ -624,7 +622,8 @@ Required JSON format (fill with real Arabic content):
         "User-Agent":    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       },
       body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
+        model: GROQ_MODEL,
+        reasoning_effort: REASONING_EFFORT,
         messages: [
           {
             role:    "system",
@@ -737,7 +736,8 @@ router.post("/generate-meal-plan", async (req: Request, res: Response): Promise<
       "User-Agent":    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     },
     body: JSON.stringify({
-      model: "llama-3.3-70b-versatile",
+      model: GROQ_MODEL,
+      reasoning_effort: REASONING_EFFORT,
       messages: [{ role: "user", content: prompt }],
       temperature: 0.7,
       max_tokens:  3000,
