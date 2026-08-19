@@ -1,10 +1,11 @@
 // fitai-backend/src/routes/ai.routes.ts
 //
-// Proxies AI chat requests to Groq. The frontend no longer holds the key —
-// it just sends messages and gets back the AI reply.
+// Proxies AI requests to Google Gemini. The frontend no longer holds the key —
+// it just sends messages and gets back the AI reply. All Gemini calls go through
+// the single `callGemini` helper below.
 //
 // Endpoint:
-//   POST /ai/chat  → send messages to Groq, return the assistant's reply
+//   POST /ai/chat  → send messages to Gemini, return the assistant's reply
 
 import { Router, Request, Response } from "express";
 import { authenticate }      from "../middleware/auth";
@@ -14,35 +15,101 @@ import { buildUserContext }  from "../lib/userContext";
 const router = Router();
 router.use(authenticate);
 
-// The Groq model powering every AI call below. Defined once here so a model
-// swap is a single edit — Groq periodically decommissions models (the previous
-// `llama-3.3-70b-versatile` was removed, which 404'd every request; `allam-2-7b`
-// was tried but its 4096-token context is too small for the plan build and it's
-// too weak to follow the Arabic onboarding script). Override per-environment via
-// GROQ_MODEL in .env without touching code.
-const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
+// ── Gemini (Google AI) client ────────────────────────────────────────────────
+// All AI calls go through Google Gemini. Chosen over Groq because Groq's free
+// tier caps at 8,000 tokens PER MINUTE, and the interview prompt alone is ~6.8k
+// tokens re-sent every turn — so onboarding could barely fit one question per
+// minute. Gemini's free tier gives 250k–1M tokens/minute, removing that wall.
+// Model is env-overridable. Default is gemini-3.6-flash (the older 2.0/2.5 flash
+// models were retired). 3.x flash keeps "thinking" on by default and thinking
+// tokens count toward the output budget, so every maxOutputTokens below is set
+// generously — thinking can never starve the actual JSON output and truncate a plan.
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
 
-// gpt-oss models "reason" before answering, and those reasoning tokens count
-// against max_tokens. Keep effort low so reasoning stays tiny (~a few tokens)
-// and never eats into the plan-build output budget. Harmless string param.
-const REASONING_EFFORT = "low";
+type LLMMessage = { role: string; content: string };
+type LLMResult =
+  | { ok: true; text: string }
+  | { ok: false; status: number; message: string; retryAfter?: number };
 
-// Groq's per-minute token budget (TPM). A single request reserves
-// prompt_tokens + max_tokens against this ceiling up front, so if the two
-// together exceed it Groq rejects the request outright ("Request too large").
-// The plan-build turn sizes its output budget against this so the whole request
-// always fits. Override per-tier via GROQ_TPM_LIMIT (paid tiers are far higher).
-const TPM_LIMIT = Number(process.env.GROQ_TPM_LIMIT) || 8000;
+// One place that speaks Gemini's REST shape. Accepts OpenAI-style messages
+// (role: "system" | "user" | "assistant"/"ai") so every call site stays simple:
+// system messages become Gemini's systemInstruction, the rest become `contents`
+// with roles mapped to user/model. Returns a normalized result (never throws for
+// HTTP errors) so routes can forward the status + a 429 retry hint unchanged.
+async function callGemini(
+  messages: LLMMessage[],
+  opts: { temperature?: number; maxOutputTokens?: number; thinkingLevel?: string } = {}
+): Promise<LLMResult> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return { ok: false, status: 500, message: "GEMINI_API_KEY not configured on server" };
 
-// Rough token estimate for sizing the plan-build output budget — no tokenizer
-// dependency. Calibrated against real Groq usage for this mostly-Arabic content
-// (~2.7 chars/token); dividing by 2.6 leans the estimate slightly HIGH, and the
-// per-message framing + priming allowance is added on top, so we never
-// under-count and accidentally push the request over TPM_LIMIT.
-function estimatePromptTokens(systemContent: string, history: ChatMsg[]): number {
-  let chars = systemContent.length;
-  for (const m of history) chars += m.text.length;
-  return Math.ceil(chars / 2.6) + history.length * 4 + 8;
+  const systemText = messages
+    .filter((m) => m.role === "system")
+    .map((m) => m.content)
+    .join("\n\n");
+  const contents = messages
+    .filter((m) => m.role !== "system")
+    .map((m) => ({
+      role:  m.role === "assistant" || m.role === "ai" ? "model" : "user",
+      parts: [{ text: m.content }],
+    }));
+  // Gemini requires the conversation to START with a user turn — drop any leading
+  // model turns (e.g. the AI welcome message that opens onboarding).
+  while (contents.length && contents[0].role === "model") contents.shift();
+  // ...and it expects the LAST turn to be the user's. The plan-build turn re-sends
+  // history ending on the AI's confirmation line with no new user message, so add a
+  // minimal nudge — the system prompt already says exactly what to produce next.
+  if (contents.length && contents[contents.length - 1].role === "model") {
+    contents.push({ role: "user", parts: [{ text: "تابع." }] });
+  }
+
+  const body: Record<string, unknown> = {
+    contents,
+    generationConfig: {
+      temperature:     opts.temperature ?? 0.7,
+      maxOutputTokens: opts.maxOutputTokens ?? 4096,
+      // 3.x "thinking" adds seconds of latency per reply. Default to "minimal" for
+      // snappy chat; callers that need a little reasoning (plan/meal build) pass "low".
+      thinkingConfig:  { thinkingLevel: opts.thinkingLevel ?? "minimal" },
+    },
+  };
+  if (systemText) body.systemInstruction = { parts: [{ text: systemText }] };
+
+  let response: globalThis.Response;
+  try {
+    response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
+      {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+        body:    JSON.stringify(body),
+      }
+    );
+  } catch {
+    return { ok: false, status: 502, message: "Failed to reach Gemini" };
+  }
+
+  if (!response.ok) {
+    const err: any = await response.json().catch(() => ({} as any));
+    const result: LLMResult = {
+      ok:      false,
+      status:  response.status,
+      message: err?.error?.message ?? "Gemini request failed",
+    };
+    if (response.status === 429) {
+      // Gemini puts a RetryInfo ("retryDelay": "12s") in error.details.
+      const details: any[] = err?.error?.details ?? [];
+      const info = details.find((d) => String(d?.["@type"]).includes("RetryInfo"));
+      const secs = info?.retryDelay ? parseInt(String(info.retryDelay), 10) : NaN;
+      result.retryAfter = Number.isFinite(secs) && secs > 0 ? secs : 30;
+    }
+    return result;
+  }
+
+  const data: any = await response.json();
+  const text: string =
+    data?.candidates?.[0]?.content?.parts?.map((p: any) => p?.text ?? "").join("") ?? "";
+  return { ok: true, text };
 }
 
 // The plan-building instructions: calculation tables + JSON schema only. Sent
@@ -54,12 +121,11 @@ function estimatePromptTokens(systemContent: string, history: ChatMsg[]): number
 const PLAN_BUILDER_PROMPT = `أنت مساعد لياقة بدنية ذكي باللغة العربية اسمك FitAI. جمعت بيانات المستخدم من المحادثة، وعليك الآن إنشاء خطته.
 
 ### قواعد صارمة:
-1. اكتب بالعربية الفصيحة السليمة فقط داخل كل النصوص المقروءة (name, notes, أسماء الأطعمة...). ممنوع خلط أي كلمة إنجليزية أو حرف لاتيني داخل جملة عربية. الاستثناء الوحيد: حقل "nameEn" (اسم التمرين بالإنجليزية) وقيمة "goal" (المفتاح الإنجليزي) — هذان فقط، ولا يظهران كنص محادثة.
-2. ممنوع إرسال JSON إذا كان أي حقل أساسي فارغاً أو صفراً.
-3. كل قيمة في JSON يجب أن تكون حقيقية ومحسوبة بناءً على بيانات المستخدم الفعلية.
-4. عدد التمارين يجب أن يتناسب مع المستوى (مبتدئ: 3-4 لكل يوم، متوسط: 4-5، متقدم: 5-6).
-5. المستخدم أكّد هدفاً نهائياً واحداً محدداً بالأرقام أثناء المحادثة السابقة (راجع الرسائل) — استخدم بالضبط الرقم/الأرقام المتفق عليها في حقل "confirmedGoal" أدناه، لا تعد حسابها من الصفر ولا تخترع رقماً مختلفاً عنها.
-6. ⚠️ حقل "confirmedGoal" إلزامي في كل استجابة JSON بدون استثناء. النظام يعتمد عليه بالكامل لحفظ هدف المستخدم في قاعدة البيانات؛ نسيانه أو حذفه يعني ضياع الهدف الذي اتفقتما عليه بالكامل. راجعه قبل إرسال أي JSON وتأكد من وجوده.
+1. اكتب بالعربية الفصيحة فقط داخل كل النصوص المقروءة (name, notes, أسماء الأطعمة). ممنوع أي كلمة إنجليزية أو حرف لاتيني داخل جملة عربية. الاستثناء الوحيد: حقل "nameEn" وقيمة "goal" (مفتاح إنجليزي).
+2. ممنوع إرسال JSON إذا كان أي حقل أساسي فارغاً أو صفراً. كل قيمة يجب أن تكون حقيقية محسوبة من بيانات المستخدم الفعلية.
+3. عدد التمارين حسب المستوى: مبتدئ 3-4 لكل يوم، متوسط 4-5، متقدم 5-6.
+4. استخدم بالضبط الرقم النهائي للهدف الذي أكّده المستخدم في المحادثة (راجع الرسائل) في حقل "confirmedGoal" — لا تعد حسابه ولا تخترع رقماً مختلفاً.
+5. ⚠️ حقل "confirmedGoal" إلزامي في كل JSON بدون استثناء — النظام يحفظ به هدف المستخدم، ونسيانه يضيّع الهدف بالكامل. تأكد من وجوده قبل الإرسال.
 
 ### معايير احترافية للتمرين والتغذية حسب الهدف:
 
@@ -85,33 +151,28 @@ const PLAN_BUILDER_PROMPT = `أنت مساعد لياقة بدنية ذكي با
 | body_recomposition | صيانة ±5% | 2.2-2.6 (مرتفع جداً) | معتدل | معتدل |
 | strength | صيانة أو فائض 5% | 1.6-2.0 | عالٍ (لدعم الأداء) | معتدل |
 
-**⚠️ أوزان الرفعات الأساسية — استخدم أرقام المستخدم الحقيقية (أولوية قصوى):**
-إذا ذكر المستخدم في المحادثة أوزانه الحالية في الرفعات الأساسية (بنش برس، سكوات، رفعة ميتة، بريس علوي)، فاجعل أوزان سيتات هذه التمارين تتدرّج تصاعدياً حتى تصل لرقمه الحالي في السيت الأخير — **ولا تتجاوزه إطلاقاً في الخطة الأولى**. المطلوب أن يكون كل وزن قابلاً للرفع فعلاً من اليوم الأول (التقدّم يأتي لاحقاً). مثال: مستخدم بنشه الحالي 60كغ في 4 سيتات → "weight":"45/50/55/60 كغ". أما التمارين التي لم يذكر لها رقماً (تمارين مساعدة أو عزل) فاستخدم الجدول التقديري أدناه.
+**⚠️ أوزان الرفعات الأساسية — أولوية قصوى:** إذا ذكر المستخدم أوزانه الحالية في الرفعات الأساسية (بنش، سكوات، رفعة ميتة، بريس علوي)، اجعل سيتات هذه التمارين تتدرّج تصاعدياً حتى تصل لرقمه في السيت الأخير — ولا تتجاوزه إطلاقاً في الخطة الأولى (كل وزن قابل للرفع من اليوم الأول؛ التقدّم لاحقاً). مثال: بنشه 60كغ في 4 سيتات → "45/50/55/60 كغ".
 
-**الأوزان المبدئية حسب المستوى ووزن الجسم (للتمارين التي لا يوجد لها رقم من المستخدم):**
+**الأوزان المبدئية للتمارين التي لا رقم لها من المستخدم (حسب المستوى ووزن الجسم):**
+مبتدئ: الصدر بالبار 20-30%، الظهر 25-35%، الأرجل 30-40%، دمبل كتف 5-8كغ، بايسبس 6-10كغ
+متوسط: الصدر 40-60%، الظهر 50-70%، سكوات 60-80%، دمبل كتف 10-15كغ، بايسبس 12-16كغ
+متقدم: الصدر 70-100%، الظهر 80-120%، سكوات 100-150%، دمبل كتف 18-25كغ، بايسبس 18-25كغ
 
-مبتدئ: الصدر بالبار 20-30%، الظهر 25-35%، الأرجل 30-40%، دمبل كتف 5-8كغ، دمبل بايسبس 6-10كغ
-متوسط: الصدر بالبار 40-60%، الظهر 50-70%، سكوات 60-80%، دمبل كتف 10-15كغ، دمبل بايسبس 12-16كغ
-متقدم: الصدر بالبار 70-100%، الظهر 80-120%، سكوات 100-150%، دمبل كتف 18-25كغ، دمبل بايسبس 18-25كغ
+**تنسيق السيتات — مهم:**
+- تمارين الأوزان: وزن تصاعدي مختلف لكل سيت وتكرارات تنازلية، مفصولة بـ "/" بعدد السيتات بالضبط. مثال (4 سيتات): "sets":"4"، "weight":"20/25/30/30 كغ"، "reps":"12/10/8/8".
+- وزن الجسم: "weight":"وزن الجسم" والتكرارات تنازلية بـ "/". مثال: "reps":"15/12/10"؛ والزمنية مثل البلانك بالثواني تنازلياً: "45/40/35 ثانية".
+- كارديو وإطالة: "weight":"" والتكرار قيمة واحدة (مدة) مثل "20 دقيقة" بدون "/".
 
-**كل سيت مختلف (مثل مدرب محترف) — مهم جداً:**
-- تمارين الأوزان: وزن تصاعدي مختلف لكل سيت (من الأخف للأثقل) مع تكرارات تنازلية كلما زاد الوزن. افصل القيم بـ "/" وليكن عددها مساوياً لعدد السيتات بالضبط.
-  مثال (4 سيتات): "sets":"4"، "weight":"20/25/30/30 كغ"، "reps":"12/10/8/8"
-- تمارين وزن الجسم: "weight":"وزن الجسم"، والتكرارات تتغير لكل سيت (تنازلية بسبب التعب) مفصولة بـ "/" بعدد السيتات. مثال (3 سيتات): "reps":"15/12/10". وللتمارين الزمنية مثل البلانك استخدم الثواني تنازلياً: "reps":"45/40/35 ثانية".
-- كارديو وإطالة: "weight":"" والتكرارات قيمة واحدة (مدة) مثل "20 دقيقة" — بدون "/".
-
-### تمييز الكارديو عن القوة (exerciseType) — إلزامي لكل تمرين:
-كل تمرين في الـ JSON يحتاج حقل "exerciseType": "strength" أو "cardio":
-- تمارين القوة (أوزان أو وزن الجسم): "exerciseType":"strength"، "durationMinutes":null، واستخدم sets/reps/weight بالتنسيق أعلاه.
-- تمارين الكارديو: "exerciseType":"cardio"، "durationMinutes": رقم صحيح بالدقائق (مثال 20، بدون نص)، واترك "sets":"" و"reps":"" و"weight":"".
+### نوع التمرين (exerciseType) — إلزامي لكل تمرين، إما "strength" أو "cardio":
+- قوة (أوزان أو وزن الجسم): "exerciseType":"strength"، "durationMinutes":null، مع sets/reps/weight بالتنسيق أعلاه.
+- كارديو: "exerciseType":"cardio"، "durationMinutes": رقم صحيح بالدقائق (مثال 20)، مع "sets":"" و"reps":"" و"weight":"".
 
 ### مفتاح الهدف:
 المستخدم اختار هدفه أثناء المحادثة. خزّن المفتاح الإنجليزي المقابل في حقل \`goal\` (واحد بالضبط من): \`fat_loss\` | \`muscle_gain\` | \`bodybuilding\` | \`body_recomposition\` | \`strength\`
 
 ### القياسات والجنس في الـ JSON:
-- الجنس: ضع "male" أو "female" بناءً على إجابة المستخدم الفعلية في المحادثة — إلزامي، لا تتركه فارغاً أبداً.
-- القياسات (بما فيها الرقبة neck): ضع كل قيمة في حقلها (chest, waist, hips, arms, legs, neck) — أرقام فقط بدون وحدة ولا أي نص إضافي. هذه إلزامية أيضاً (راجع قسم "تأكيد الهدف" — لا يُفترض أن تصل لهذه المرحلة أصلاً بدون قياسات فعلية).
-  صحيح: "chest": "95"  —  خطأ ممنوع: "chest": "95 سم" أو "chest": "95cm" أو "chest": "حوالي 95". نفس القاعدة على "weight" و"height" و"age" — رقم فقط، بدون أي وحدة أو كلمة.
+- الجنس: "male" أو "female" حسب إجابة المستخدم — إلزامي، لا تتركه فارغاً.
+- القياسات (chest, waist, hips, arms, legs, neck): أرقام فقط بدون وحدة ولا نص. نفس القاعدة على weight/height/age. صحيح "chest":"95" — خطأ "95 سم" أو "95cm" أو "حوالي 95".
 
 ### إنشاء الخطة الآن:
 بياناتك عن المستخدم في المحادثة (الاسم، العمر، الوزن، الطول، الجنس، الهدف، المستوى، الأمراض، القياسات، والرقم النهائي المؤكَّد لهدفه). إذا نقص شيء أساسي اطلبه بسؤال واحد قبل المتابعة. وإلا قل: "شكراً! سأبدأ الآن بإنشاء خطتك..." ثم أرسل JSON بهذا الشكل بين \`\`\`json و \`\`\`:
@@ -134,33 +195,24 @@ const PLAN_BUILDER_PROMPT = `أنت مساعد لياقة بدنية ذكي با
 }
 \`\`\`
 
-⚠️ المثال أعلاه مختصر ويعرض يومين فقط (الأحد كنموذج ليوم تمرين، والجمعة كنموذج ليوم راحة) لتوضيح التنسيق والحقول المطلوبة فقط. في مخرجاتك الفعلية **يجب** أن تُخرج \`weeklyPlan\` كاملةً بكل الأيام السبعة بالترتيب: الأحد، الاثنين، الثلاثاء، الأربعاء، الخميس، الجمعة، السبت — 5 أيام "تمرين" + يومان "راحة" (الجمعة دائماً راحة + يوم آخر غير ملاصق لها)، وكل يوم يحتوي 2-3 تمارين حقيقية داخل "exercises" (بما فيها يوما الراحة). ممنوع الاكتفاء بيومين أو ترك أي يوم ناقصاً.
+⚠️ المثال أعلاه يعرض يومين فقط للتوضيح. أخرج \`weeklyPlan\` كاملةً بالأيام السبعة بالترتيب (الأحد، الاثنين، الثلاثاء، الأربعاء، الخميس، الجمعة، السبت): 5 أيام "تمرين" + يومان "راحة"، والجمعة دائماً راحة مع يوم راحة آخر غير ملاصق لها. كل يوم — بما فيه يوما الراحة — يحتوي 2-3 تمارين حقيقية داخل "exercises" (ممنوع [] أو ترك يوم ناقصاً؛ يوما الراحة يحتفظان بتمارين لأن المستخدم قد يحوّلهما لتمرين، والفرق فقط "type":"راحة"). أيام التمرين تغطي كل المجموعات العضلية بتوازن.
 
-### الهدف المؤكَّد في الـ JSON (confirmedGoal):
-حقل confirmedGoal يحوي **مجموعتين منفصلتين تماماً** — عبِّئ كلتيهما، لا واحدة فقط:
+### confirmedGoal — عبّئ **مجموعتين معاً**، لا واحدة فقط:
+**(أ) رقم الهدف طويل المدى:** عبّئ فقط حقل/حقول الهدف المرتبطة بهدف المستخدم بالرقم المتفق عليه، والباقي null:
+- fat_loss: mainTargetWeight + mainTargetBodyFatPct (كلاهما)
+- muscle_gain: mainTargetWeight (كتلة العضلة يحسبها السيرفر — لا تضعها)
+- bodybuilding: mainTargetWeight (نفس muscle_gain برقم أكبر وأطمح)
+- body_recomposition: mainTargetBodyFatPct فقط، وmainTargetWeight = null دائماً (الوزن وكتلة العضلة يحسبهما السيرفر)
+- strength: mainTargetBenchPress + mainTargetSquat + mainTargetDeadlift + mainTargetOverheadPress (الأربعة)
 
-**المجموعة (أ) — رقم الهدف على المدى الطويل:** عبِّئ فقط حقل/حقول *الهدف* المرتبطة بهدف المستخدم بالرقم الذي اتفقتما عليه، واترك باقي حقول *الهدف* null. رقم واحد نهائي فقط لكل مقياس — لا يوجد "هدف قريب" منفصل بعد الآن. (كلمة "فقط" هنا تخص حقول الهدف في هذه المجموعة، ولا علاقة لها بالمجموعة (ب) أدناه.)
-- fat_loss: mainTargetWeight + mainTargetBodyFatPct (كلاهما — هذا الهدف الوحيد الذي يحتاج رقمين)
-- muscle_gain: mainTargetWeight (كتلة العضلة المستهدفة تُحسب تلقائياً بالسيرفر من هذا الرقم — لا تحاول حسابها أو وضعها بنفسك)
-- bodybuilding: mainTargetWeight — نفس حقل muscle_gain بالضبط، لكن برقم أكبر وأكثر طموحاً (فائض غذائي أوضح)
-- body_recomposition: mainTargetBodyFatPct فقط. ⚠️ اترك mainTargetWeight = null دائماً لهذا الهدف — كتلة العضلة والوزن النهائي يُحسبان تلقائياً بالسيرفر من نسبة الدهون، لا تضعهما بنفسك
-- strength: mainTargetBenchPress + mainTargetSquat + mainTargetDeadlift + mainTargetOverheadPress (الأربعة معاً)
+**(ب) ⚠️ أوزان الرفعات الحالية (startBench/startSquat/startDeadlift/startOverheadPress):** نقطة البداية لا الهدف. لأهداف strength/muscle_gain/bodybuilding انسخ هنا الأرقام التي قالها المستخدم فعلاً لوزنه الحالي في كل تمرين (إلزامية إن ذكرها — قاعدة "فقط" في المجموعة (أ) لا تنطبق هنا). اترك null لتمرين لم يذكره، و null دائماً لـ fat_loss/body_recomposition. لا تخترع رقماً.
 
-**المجموعة (ب) — ⚠️ أوزان الرفعات الحالية (startBench, startSquat, startDeadlift, startOverheadPress):** هذه ليست جزءاً من الهدف، بل هي نقطة البداية التي ذكرها المستخدم. لأهداف strength / muscle_gain / bodybuilding **يجب** أن تنسخ هنا الأرقام التي قالها المستخدم فعلاً لوزنه الحالي في كل تمرين عندما سألته عن أوزانه الحالية (بنش، سكوات، رفعة ميتة، بريس علوي). إلزامية إذا ذكرها المستخدم — لا تتركها null بحجة أن الهدف يحتاج حقلاً واحداً فقط، فقاعدة "فقط" في المجموعة (أ) لا تنطبق هنا إطلاقاً. اترك null فقط لتمرين لم يذكره المستخدم، و null دائماً لأهداف fat_loss / body_recomposition. لا تخترع رقماً — فقط ما قاله المستخدم فعلاً.
-
-⚠️ لا تضع أي رقم في targetLeanMass أو أي حقل غير مذكور أعلاه — هذه الحقول محذوفة من هذا النظام، والحقول المحسوبة تلقائياً (كتلة العضلة، الوزن النهائي لـ body_recomposition) يحسبها السيرفر بنفسه ولا دخل لك بها.
+⚠️ لا تضع رقماً في targetLeanMass أو أي حقل غير مذكور أعلاه — الحقول المحسوبة يتكفّل بها السيرفر.
 
 ### مهم:
-- IDs فريدة لكل تمرين (d1e1, d1e2...)
-- nameEn إنجليزي صحيح لكل تمرين (فقط هذا الحقل بالإنجليزية — كل شيء آخر عربي)
-- 5 أيام تمرين + يومان راحة. يوم الجمعة دائماً راحة، واختر يوماً آخر للراحة غير ملاصق للجمعة (لا يكون اليومان متتاليين). أيام التمرين الخمسة يجب أن تغطي كل المجموعات العضلية الرئيسية بشكل متوازن.
-- ⚠️ مهم جداً: كل الأيام السبعة (بما فيها يوما الراحة) يجب أن تحتوي على تمرين كامل حقيقي (2-3 تمارين) داخل مصفوفة "exercises" — ممنوع ترك أي يوم فارغاً ([]). الفرق الوحيد ليومَي الراحة هو "type": "راحة" مع احتفاظهما بتمارين كاملة (لأن المستخدم قد يحوّلهما لتمرين). باقي الأيام الخمسة "type": "تمرين".
-- القياسات اتركها "" إذا لم يعطها المستخدم
-- الأرقام في المثال أعلاه للتوضيح فقط — احسب القيم الحقيقية بناءً على بيانات المستخدم (وزنه، هدفه، مستواه)
-- ⚠️ كل تمارين الأوزان: حقلا "weight" و"reps" قيم مفصولة بـ "/" بعدد السيتات (الوزن تصاعدي، التكرار تنازلي). تمارين وزن الجسم: "reps" مفصولة بـ "/" أيضاً. الكارديو/الإطالة فقط: durationMinutes رقم، وsets/reps/weight فارغة "".
-- ⚠️ كل تمرين يحتاج "exerciseType": "strength" أو "cardio" (راجع القسم أعلاه) — بدون هذا الحقل لن يُحفظ التمرين بشكل صحيح.
-- الخطة الغذائية يجب أن تحتوي دائماً على 3-4 وجبات تغطي اليوم كاملاً (إفطار، غداء، وجبة خفيفة، عشاء)
-- التغذية: احسب أهداف اليوم فقط (totalCalories, protein, carbs, fat) — الوجبات تُنشأ في خطوة منفصلة، لا تضع مصفوفة meals
+- IDs فريدة لكل تمرين (d1e1, d1e2...)، وnameEn إنجليزي صحيح لكل تمرين (هذا الحقل فقط بالإنجليزية).
+- القياسات اتركها "" إذا لم يعطها المستخدم. الأرقام في المثال للتوضيح فقط — احسب القيم الحقيقية من بيانات المستخدم.
+- التغذية: احسب أهداف اليوم فقط (totalCalories, protein, carbs, fat) بدون مصفوفة meals (الوجبات تُنشأ لاحقاً)، والخطة الغذائية تغطي اليوم كاملاً بـ 3-4 وجبات.
 
 ### تعديل الخطة:
 إذا أرسل المستخدم "[تحديث القياسات]": أعد بناء الخطة وأرسل JSON جديد إذا كان التغيير كبيراً.`;
@@ -179,9 +231,12 @@ const INTERVIEW_PROMPT = `أنت مساعد لياقة بدنية ذكي بال�
 
 ### قواعد صارمة — لا تخالفها أبداً:
 1. اسأل سؤالاً واحداً فقط في كل رسالة — لا تجمع سؤالين معاً أبداً. مثال ممنوع: "ما وزنك وطولك؟". الصحيح: اسأل عن الوزن، انتظر الإجابة، ثم اسأل عن الطول في رسالة منفصلة.
-2. راجع قسم اللغة أعلاه — عربية فقط دائماً.
-3. لا تنتقل للسؤال التالي إلا بعد الحصول على إجابة واضحة.
-4. ممنوع إرسال أي خطة أو JSON قبل أن تجمع كل المعلومات وتؤكد الهدف الرقمي معه (راجع قسم "تأكيد الهدف" في آخر هذا البرومبت).
+2. لا تكرر نص السؤال أكثر من مرة داخل الرسالة الواحدة — اكتب السؤال مرة واحدة فقط. مثال ممنوع: "ما وزنك؟ ما وزنك؟".
+3. راجع قسم اللغة أعلاه — عربية فقط دائماً.
+4. لا تنتقل للسؤال التالي إلا بعد الحصول على إجابة واضحة.
+5. ⚠️ تحقّق من منطقية كل رقم قبل قبوله. إذا أعطاك المستخدم رقماً غير منطقي فيزيائياً (مثل: عمر خارج 18-70، وزن أو طول مستحيل، أو وزن لا يتناسب مع طوله كأن يكون طوله 190 سم ووزنه 30 كغ) فلا تقبله ولا تنتقل للسؤال التالي — اعتذر بلطف واطلب منه الرقم الصحيح، دون ذكر أي حدود رقمية (هذه بياناته وهو أدرى بها). راعِ دائماً تناسب الوزن مع الطول.
+6. سؤال الأمراض أو الإصابات (الخطوة 7) إلزامي — لا تتخطَّه أبداً مهما بدا المستخدم بصحة جيدة.
+7. ممنوع إرسال أي خطة أو JSON قبل أن تجمع كل المعلومات وتؤكد الهدف الرقمي معه (راجع قسم "تأكيد الهدف" في آخر هذا البرومبت).
 
 ### الترتيب الإلزامي لجمع المعلومات:
 1. الاسم  2. العمر  3. الوزن  4. الطول  5. الهدف  6. المستوى  7. الأمراض  8. الجنس  9. قياسات الجسم
@@ -189,6 +244,8 @@ const INTERVIEW_PROMPT = `أنت مساعد لياقة بدنية ذكي بال�
 اسأل عن كل خطوة بالترتيب.
 
 ### كيفية تحديد الهدف (السؤال رقم 5):
+⚠️ تحديد نوع الهدف هنا ليس نهاية المحادثة. بمجرد أن يختار المستخدم هدفه العام، لا تؤكّده نهائياً ولا ترسل جملة الإنهاء ("هذا هدفك النهائي") ولا تبدأ ببناء الخطة — بل تابع فوراً للسؤال رقم 6 (المستوى) ثم بقية الأسئلة بالترتيب. التأكيد النهائي بالأرقام وجملة الإنهاء يأتيان فقط في المرحلة الأخيرة بعد جمع كل المعلومات (المستوى، الأمراض، الجنس، القياسات).
+
 لا تعرض القائمة مباشرة. اتبع هذه الخطوات بالترتيب:
 
 **الخطوة 1 — سؤال مفتوح:**
@@ -213,6 +270,11 @@ const INTERVIEW_PROMPT = `أنت مساعد لياقة بدنية ذكي بال�
 5. **تضخيم عضلي (Bodybuilding)** — زيادة الوزن والعضل معاً بفائض غذائي واضح، لمن يريد حجماً أكبر لا مجرد بناء عضل بوزن ثابت"
 
 إذا كانت إجابة المستخدم تدل بوضوح على زيادة الوزن والحجم معاً (مثل: "أبي أضخم"، "أبي أزيد وزني وعضلي"، "bulking")، فرّق بينه وبين بناء العضلات العادي: بناء العضلات لا يستهدف بالضرورة زيادة وزن كبيرة، بينما تضخيم عضلي هدفه زيادة الوزن والعضل معاً بوضوح.
+
+### السؤال عن الأمراض والإصابات (السؤال رقم 7 — بعد المستوى وقبل الجنس، إلزامي ولا يُتخطى):
+بعد أن يخبرك المستخدم بمستواه، اسأله في رسالة منفصلة — دائماً، مهما بدا بصحة جيدة — عن حالته الصحية بجملة طبيعية بهذا المعنى:
+"قبل ما نكمل — هل عندك أي أمراض مزمنة، إصابات سابقة، أو حساسية (تجاه طعام أو غيره) لازم آخذها بالحسبان وأنا أبني خطتك؟ لو ما في شي، قل لي «لا يوجد» ونكمل."
+انتظر إجابته وسجّل ما يذكره (أو «لا يوجد») قبل الانتقال. ⚠️ ممنوع الانتقال لسؤال الجنس أو القياسات أو تأكيد الهدف قبل أن تطرح هذا السؤال فعلاً وتحصل على إجابة — هذا السؤال هو أكثر خطوة يقع تخطّيها بالخطأ، فتأكد منه.
 
 ### السؤال عن الجنس (السؤال رقم 8 — قبل القياسات مباشرة):
 اسأل بجملة طبيعية قصيرة، مثل: "قبل قياساتك — أنت ذكر ولا أنثى؟ بحتاجها أحسب نسبة الدهون بدقة." انتظر إجابة واضحة قبل الانتقال للقياسات.
@@ -262,7 +324,11 @@ const INTERVIEW_PROMPT = `أنت مساعد لياقة بدنية ذكي بال�
 - إذا وافق المستخدم (مثل "تمام"، "ماشي"، "موافق") → اعتبره تأكيداً نهائياً، وأرسل جملة الإنهاء أدناه فوراً في نفس الرد.
 - إذا طلب هدفاً أعلى ("أبي أكثر"، "أقدر أوصل لأكثر من كذا") → قدّم له خياراً طموحاً أعلى من الآمن، ووضّح له بصراحة أنه أصعب وفيه مخاطرة أعلى وممكن يكون غير مناسب لجسمه (إجهاد، إصابة، إحباط لو ما التزم، جسم غير متناسق)، ثم اسأله يتأكد أنه يريده فعلاً. بمجرد تأكيده (على أي رقم اتفقتما عليه، آمن أو طموح) → أرسل جملة الإنهاء فوراً في نفس الرد.
 
-بمجرد التأكيد النهائي، أرسل هذه الجملة **حرفياً وبدون أي تغيير في صياغتها**، كآخر شيء في نفس الرد:
+⚠️ قائمة تحقّق إلزامية قبل جملة الإنهاء: لا ترسل جملة الإنهاء إطلاقاً حتى تكون قد جمعت فعلاً كل هذه بالترتيب ولم تتخطَّ أياً منها:
+(1) الاسم (2) العمر (3) الوزن (4) الطول (5) الهدف (6) المستوى (7) الأمراض أو الإصابات (8) الجنس (9) القياسات — وأوزان الرفعات الحالية لأهداف strength / muscle_gain / bodybuilding.
+راجع رسائل المحادثة السابقة فعلياً: إذا نقص أي بند — وخصوصاً سؤال الأمراض/الإصابات أو القياسات — فاسأل عنه الآن ولا ترسل جملة الإنهاء حتى تكملها كلها. تحديد نوع الهدف وحده لا يكفي إطلاقاً لإرسال جملة الإنهاء.
+
+بمجرد التأكيد النهائي (وبعد اكتمال القائمة أعلاه)، أرسل هذه الجملة **حرفياً وبدون أي تغيير في صياغتها**، كآخر شيء في نفس الرد:
 
 "تمام، هذا هدفك النهائي ✅ خلّني الحين أبني لك خطتك الكاملة..."
 
@@ -328,6 +394,20 @@ function goalConfirmationDone(messages: ChatMsg[]): boolean {
   );
 }
 
+// Safety net for a misbehaving model: the measurements question is the LAST step
+// before goal confirmation, and the prompt dictates its exact wording ("قياسات
+// جسمك" / "محيط الصدر"). If the AI never asked it, onboarding is not truly done —
+// so even if the model prematurely emits the closing marker (right after picking a
+// goal, skipping level/diseases/gender/measurements), we refuse to build the plan.
+// This guarantees the plan is never built on half-collected data.
+function measurementsAsked(messages: ChatMsg[]): boolean {
+  return messages.some(
+    (m) =>
+      m.role === "ai" &&
+      (m.text.includes("قياسات جسمك") || m.text.includes("محيط الصدر"))
+  );
+}
+
 // True ONLY on the turn that should actually BUILD the plan, so the heavy prompt
 // + large output budget land there and nowhere else:
 //   • during onboarding: once the goal-confirmation closing marker has been sent
@@ -338,7 +418,9 @@ function goalConfirmationDone(messages: ChatMsg[]): boolean {
 function needsFullTokens(messages: ChatMsg[], isOnboarding: boolean): boolean {
   const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
   if (lastUserMsg?.text.includes("[تحديث القياسات]")) return true;
-  if (isOnboarding && goalConfirmationDone(messages)) return true; // UPDATED (Task 4)
+  // Build only when the goal is confirmed AND measurements were actually asked —
+  // the latter blocks a premature closing marker from building a half-data plan.
+  if (isOnboarding && goalConfirmationDone(messages) && measurementsAsked(messages)) return true;
   return false;
 }
 
@@ -351,14 +433,7 @@ router.post("/chat", async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  const apiKey = process.env.GROQ_API_KEY;
-  console.log("API Key loaded:", !!process.env.GROQ_API_KEY);
-  if (!apiKey) {
-    res.status(500).json({ error: "GROQ_API_KEY not configured on server" });
-    return;
-  }
-
-  // Determine onboarding vs post-setup up front — it drives the token budget,
+  // Determine onboarding vs post-setup up front — it drives the output budget,
   // history trimming, system prompt, AND sampling temperature.
   const userId = req.user!.userId;
   const userRow = await prisma.user.findUnique({
@@ -399,80 +474,31 @@ router.post("/chat", async (req: Request, res: Response): Promise<void> => {
       : COACH_PROMPT;
   }
 
-  // Size the output budget so the whole request always stays within the per-minute
-  // TPM ceiling (prompt + max_tokens ≤ TPM_LIMIT). Question turns are tiny → flat
-  // 700. The plan-build turn takes whatever room is left after the (large) prompt,
-  // capped at 3000 (a full plan never needs more). We take `min(3000, room)` so the
-  // budget can NEVER exceed the room left under the ceiling — guaranteeing the
-  // request is never rejected as "too large". The max(…, 256) is only a floor
-  // against a zero/negative budget; it can only bite on an absurdly long chat
-  // (prompt alone near the whole ceiling), where no full plan could fit anyway.
-  // On a normal conversation this yields the full 3000; a long chat just shrinks it.
-  const planRoom  = TPM_LIMIT - estimatePromptTokens(systemContent, historyToSend) - 200;
-  const maxTokens = planMode ? Math.min(3000, Math.max(256, planRoom)) : 700;
+  // Gemini's free tier has a huge per-minute budget, so we no longer size the
+  // output against a ceiling. Budgets are generous because 3.x "thinking" tokens
+  // also draw from here — the plan turn gets ample room for thinking + a full
+  // 7-day plan, and even a question turn leaves room for thinking + one question.
+  const maxOutputTokens = planMode ? 16384 : 2048;
 
-  try {
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type":  "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-        "User-Agent":    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      },
-      body: JSON.stringify({
-        model: GROQ_MODEL,
-        reasoning_effort: REASONING_EFFORT,
-        messages: [
-          { role: "system", content: systemContent },
-          ...historyToSend.map((m) => ({
-            role:    m.role === "ai" ? "assistant" : "user",
-            content: m.text,
-          })),
-        ],
-        temperature,
-        max_tokens:  maxTokens,
-      }),
-    });
+  const result = await callGemini(
+    [
+      { role: "system", content: systemContent },
+      ...historyToSend.map((m) => ({ role: m.role, content: m.text })),
+    ],
+    { temperature, maxOutputTokens, thinkingLevel: planMode ? "low" : "minimal" }
+  );
 
-    if (!response.ok) {
-      const err: any = await response.json().catch(() => ({} as any));
-      const h = response.headers;
-      // Log the FULL Groq error + rate-limit headers so we can see EXACTLY which
-      // limit was hit (per-minute vs per-day, tokens vs requests) and when it
-      // resets. The error message itself usually spells out "Limit/Used/Requested".
-      console.error(
-        `❌ Groq ${response.status} [planMode=${planMode}]: ${err?.error?.message ?? "(no message body)"}\n` +
-        `   tokens : limit=${h.get("x-ratelimit-limit-tokens")} remaining=${h.get("x-ratelimit-remaining-tokens")} reset=${h.get("x-ratelimit-reset-tokens")}\n` +
-        `   requests: limit=${h.get("x-ratelimit-limit-requests")} remaining=${h.get("x-ratelimit-remaining-requests")} reset=${h.get("x-ratelimit-reset-requests")}\n` +
-        `   retry-after=${h.get("retry-after")}`
-      );
-      const payload: { error: string; retryAfter?: number } = {
-        error: err?.error?.message ?? "Groq request failed",
-      };
-      // On a rate-limit (429), tell the client how long to wait. Groq sends a
-      // `Retry-After` header (seconds); fall back to 8s when it's missing.
-      if (response.status === 429) {
-        const ra = Number(h.get("retry-after"));
-        payload.retryAfter = Number.isFinite(ra) && ra > 0 ? ra : 8;
-      }
-      res.status(response.status).json(payload);
-      return;
-    }
-
-    const data = await response.json() as any;
-    const reply = data.choices?.[0]?.message?.content ?? "لم أتمكن من الرد.";
-
-    // Log token usage for monitoring (planMode + the budget we asked for, so we
-    // can correlate big turns with rate-limit hits and per-minute accumulation)
-    if (data.usage) {
-      console.log(`🤖 Groq [planMode=${planMode}, max=${maxTokens}]: ${data.usage.prompt_tokens} in + ${data.usage.completion_tokens} out = ${data.usage.total_tokens} total`);
-    }
-
-    res.json({ reply });
-  } catch (err) {
-    console.error("AI proxy error:", err);
-    res.status(500).json({ error: "Failed to reach AI service" });
+  if (!result.ok) {
+    console.error(`❌ Gemini ${result.status} [planMode=${planMode}]: ${result.message}`);
+    const payload: { error: string; retryAfter?: number } = { error: result.message };
+    if (result.status === 429 && result.retryAfter) payload.retryAfter = result.retryAfter;
+    res.status(result.status).json(payload);
+    return;
   }
+
+  const reply = result.text.trim() || "لم أتمكن من الرد.";
+  console.log(`🤖 Gemini [planMode=${planMode}]: reply ${reply.length} chars`);
+  res.json({ reply });
 });
 
 // ── POST /ai/analyze-meal ──────────────────────────────────────────────────────
@@ -496,42 +522,20 @@ router.post("/analyze-meal", async (req: Request, res: Response): Promise<void> 
     return;
   }
 
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) {
-    res.status(500).json({ error: "GROQ_API_KEY not configured on server" });
-    return;
-  }
-
   try {
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type":  "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-        "User-Agent":    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      },
-      body: JSON.stringify({
-        model: GROQ_MODEL,
-        reasoning_effort: REASONING_EFFORT,
-        messages: [
-          { role: "system", content: ANALYZE_PROMPT },
-          { role: "user",   content: foodName.trim() },
-        ],
-        temperature: 0.3,
-        max_tokens:  400,
-      }),
-    });
-
-    if (!response.ok) {
-      const err: any = await response.json().catch(() => ({} as any));
-      res.status(response.status).json({ error: err?.error?.message ?? "Groq request failed" });
+    const result = await callGemini(
+      [
+        { role: "system", content: ANALYZE_PROMPT },
+        { role: "user",   content: foodName.trim() },
+      ],
+      { temperature: 0.3, maxOutputTokens: 2048 }
+    );
+    if (!result.ok) {
+      res.status(result.status).json({ error: result.message });
       return;
     }
 
-    const data    = await response.json() as any;
-    const content = data.choices?.[0]?.message?.content ?? "";
-
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    const jsonMatch = result.text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       res.status(500).json({ error: "Failed to parse AI response" });
       return;
@@ -562,41 +566,20 @@ router.post("/analyze-full-meal", async (req: Request, res: Response): Promise<v
     return;
   }
 
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) {
-    res.status(500).json({ error: "GROQ_API_KEY not configured on server" });
-    return;
-  }
-
   try {
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type":  "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-        "User-Agent":    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      },
-      body: JSON.stringify({
-        model: GROQ_MODEL,
-        reasoning_effort: REASONING_EFFORT,
-        messages: [
-          { role: "system", content: FULL_MEAL_PROMPT },
-          { role: "user",   content: list.join("\n") },
-        ],
-        temperature: 0.3,
-        max_tokens:  200,
-      }),
-    });
-
-    if (!response.ok) {
-      const err: any = await response.json().catch(() => ({} as any));
-      res.status(response.status).json({ error: err?.error?.message ?? "Groq request failed" });
+    const result = await callGemini(
+      [
+        { role: "system", content: FULL_MEAL_PROMPT },
+        { role: "user",   content: list.join("\n") },
+      ],
+      { temperature: 0.3, maxOutputTokens: 2048 }
+    );
+    if (!result.ok) {
+      res.status(result.status).json({ error: result.message });
       return;
     }
 
-    const data    = await response.json() as any;
-    const content = data.choices?.[0]?.message?.content ?? "";
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    const jsonMatch = result.text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       res.status(500).json({ error: "Failed to parse AI response" });
       return;
@@ -627,12 +610,6 @@ router.post("/exercise-info", async (req: Request, res: Response): Promise<void>
     return;
   }
 
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) {
-    res.status(500).json({ error: "GROQ_API_KEY not configured on server" });
-    return;
-  }
-
   const prompt = `You are a fitness expert. Reply ONLY with a valid JSON object, no markdown, no explanation, no extra text before or after. Use Arabic language for all values.
 
 Exercise: "${nameEn}" targeting "${muscleGroup ?? ""}"
@@ -641,36 +618,23 @@ Required JSON format (fill with real Arabic content):
 {"description":"وصف مختصر للتمرين وماذا يستهدف بالضبط","steps":["الخطوة الأولى","الخطوة الثانية","الخطوة الثالثة","الخطوة الرابعة"],"mistakes":["الخطأ الأول","الخطأ الثاني","الخطأ الثالث"]}`;
 
   try {
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type":  "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-        "User-Agent":    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      },
-      body: JSON.stringify({
-        model: GROQ_MODEL,
-        reasoning_effort: REASONING_EFFORT,
-        messages: [
-          {
-            role:    "system",
-            content: "You are a fitness expert. You MUST reply with ONLY a valid JSON object. No markdown backticks, no preamble, no explanation. Just the raw JSON.",
-          },
-          { role: "user", content: prompt },
-        ],
-        temperature: 0.3,
-        max_tokens:  1000,
-      }),
-    });
+    const result = await callGemini(
+      [
+        {
+          role:    "system",
+          content: "You are a fitness expert. You MUST reply with ONLY a valid JSON object. No markdown backticks, no preamble, no explanation. Just the raw JSON.",
+        },
+        { role: "user", content: prompt },
+      ],
+      { temperature: 0.3, maxOutputTokens: 2048 }
+    );
 
-    if (!response.ok) {
-      const err: any = await response.json().catch(() => ({} as any));
-      res.status(response.status).json({ error: err?.error?.message ?? "Groq request failed" });
+    if (!result.ok) {
+      res.status(result.status).json({ error: result.message });
       return;
     }
 
-    const data    = await response.json() as any;
-    const content = (data.choices?.[0]?.message?.content ?? "").trim();
+    const content = result.text.trim();
 
     // The model is told to return raw JSON, but be tolerant: try direct parse,
     // then a ```json``` fence, then the first {...} block.
@@ -725,9 +689,6 @@ router.post("/generate-meal-plan", async (req: Request, res: Response): Promise<
     return;
   }
 
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) { res.status(500).json({ error: "GROQ_API_KEY not configured on server" }); return; }
-
   const userId = req.user!.userId;
   const user = await prisma.user.findUnique({
     where:  { id: userId },
@@ -755,51 +716,30 @@ router.post("/generate-meal-plan", async (req: Request, res: Response): Promise<
 {"days":{"الأحد":[{"name":"فطور","time":"7:00 ص","items":["..."],"emoji":"☀️","cal":450},{"name":"غداء","time":"1:00 م","items":["..."],"emoji":"🍽️","cal":650},{"name":"وجبة خفيفة","time":"4:00 م","items":["..."],"emoji":"🍎","cal":250},{"name":"عشاء","time":"8:00 م","items":["..."],"emoji":"🌙","cal":550}],"الاثنين":[...],"الثلاثاء":[...],"الأربعاء":[...],"الخميس":[...],"الجمعة":[...],"السبت":[...]}}
 \`\`\``;
 
-  const doGroqCall = () => fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type":  "application/json",
-      "Authorization": `Bearer ${apiKey}`,
-      "User-Agent":    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    },
-    body: JSON.stringify({
-      model: GROQ_MODEL,
-      reasoning_effort: REASONING_EFFORT,
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.7,
-      max_tokens:  3000,
-    }),
-  });
+  const genMealPlan = () =>
+    callGemini([{ role: "user", content: prompt }], { temperature: 0.7, maxOutputTokens: 16384, thinkingLevel: "low" });
 
   try {
-    let response = await doGroqCall();
-
-    // This call fires right after the big main-plan call, which usually eats most
-    // of the per-minute TPM budget — so a first 429 here is expected. Wait the
-    // advised time (the minute window resets) and retry once.
-    if (response.status === 429) {
-      const ra = Number(response.headers.get("retry-after"));
-      const waitSec = Math.min(Number.isFinite(ra) && ra > 0 ? ra + 1 : 16, 30);
-      console.log(`🍽️ meal-plan: 429 — waiting ${waitSec}s for the TPM window to reset, then retrying`);
+    // Fires right after the main plan build. Gemini's per-minute budget is huge,
+    // but keep a single 429 retry as cheap insurance.
+    let result = await genMealPlan();
+    if (!result.ok && result.status === 429) {
+      const waitSec = Math.min(result.retryAfter ?? 16, 30);
+      console.log(`🍽️ meal-plan: 429 — waiting ${waitSec}s then retrying`);
       await new Promise((r) => setTimeout(r, waitSec * 1000));
-      response = await doGroqCall();
+      result = await genMealPlan();
     }
 
-    console.log(`🍽️ meal-plan: groq status=${response.status}`);
-    if (!response.ok) {
-      const err: any = await response.json().catch(() => ({} as any));
-      console.warn(`🍽️ meal-plan groq error ${response.status}: ${err?.error?.message ?? "(no body)"}`);
-      const payload: { error: string; retryAfter?: number } = { error: err?.error?.message ?? "Groq request failed" };
-      if (response.status === 429) {
-        const ra = Number(response.headers.get("retry-after"));
-        payload.retryAfter = Number.isFinite(ra) && ra > 0 ? ra : 8;
-      }
-      res.status(response.status).json(payload);
+    console.log(`🍽️ meal-plan: gemini ok=${result.ok}`);
+    if (!result.ok) {
+      console.warn(`🍽️ meal-plan gemini error ${result.status}: ${result.message}`);
+      const payload: { error: string; retryAfter?: number } = { error: result.message };
+      if (result.status === 429 && result.retryAfter) payload.retryAfter = result.retryAfter;
+      res.status(result.status).json(payload);
       return;
     }
 
-    const data: any = await response.json();
-    const content: string = data.choices?.[0]?.message?.content ?? "";
+    const content: string = result.text;
     const match = content.match(/```json\s*([\s\S]*?)\s*```/) ?? content.match(/\{[\s\S]*\}/);
     if (!match) {
       console.warn(`🍽️ meal-plan: no JSON found. content starts: ${content.slice(0, 120)}`);

@@ -1,8 +1,9 @@
 import { Lock } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
-import { toggleDone, setSelectedDay } from "@/features/workout/workoutSlice";
+import { setSelectedDay } from "@/features/workout/workoutSlice";
 import { DAYS_ORDER, type DayName } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -16,6 +17,7 @@ const DAY_EMOJIS: Record<DayName, string> = {
 
 export function WeeklyPlanPage() {
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
   const { weeklyPlan, selectedDay } = useAppSelector((s) => s.workout);
 
   if (!weeklyPlan) {
@@ -39,7 +41,7 @@ export function WeeklyPlanPage() {
   return (
     <div className="mx-auto max-w-5xl px-6 pb-20 pt-28">
       <h1 className="mb-2 text-4xl font-black">الجدول الأسبوعي 📅</h1>
-      <p className="mb-8 text-slate-400">الأيام الماضية مقفلة — يمكنك تعديل اليوم والأيام القادمة فقط</p>
+      <p className="mb-8 text-slate-400">تسجيل الإنجاز متاح ليوم اليوم فقط — من صفحة التمرين</p>
 
       {/* ملخص */}
       <div className="mb-8 grid grid-cols-3 gap-4">
@@ -147,58 +149,56 @@ export function WeeklyPlanPage() {
           ) : (
             <div className="space-y-3">
               {(selectedDayData.exercises ?? []).map((ex, i) => {
-                const isPastDay = DAYS_ORDER.indexOf(selectedDay) < TODAY_IDX;
+                // Future days aren't here yet — their exercises are shown but not
+                // tappable (nothing to view/log until the day arrives).
+                const isFutureDay = DAYS_ORDER.indexOf(selectedDay) > TODAY_IDX;
                 return (
-                  <div key={ex.id}
-                    onClick={() => !isPastDay && dispatch(toggleDone({ day: selectedDay, exerciseId: ex.id }))}
-                    className={cn(
-                      "rounded-2xl border p-4 transition-all",
-                      isPastDay
-                        ? "border-white/5 bg-bg-card/50 opacity-60 cursor-not-allowed"
-                        : ex.done
-                        ? "border-accent/20 bg-accent/5 cursor-pointer"
-                        : "border-white/10 bg-bg-card cursor-pointer hover:border-white/20"
+                <div key={ex.id}
+                  onClick={() => !isFutureDay && navigate(`/exercise/${encodeURIComponent(selectedDay)}/${ex.id}`)}
+                  className={cn(
+                    "rounded-2xl border p-4 transition-all",
+                    isFutureDay
+                      ? "cursor-not-allowed border-white/5 bg-bg-card/50 opacity-60"
+                      : ex.done
+                      ? "cursor-pointer border-accent/20 bg-accent/5"
+                      : "cursor-pointer border-white/10 bg-bg-card hover:border-white/20"
+                  )}>
+                  <div className="flex items-start gap-4">
+                    {/* رقم التمرين أو علامة ✓ أو قفل (يوم قادم) */}
+                    <div className={cn(
+                      "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-bold",
+                      isFutureDay ? "bg-white/5 text-slate-600" : ex.done ? "bg-accent/20 text-accent" : "bg-white/5 text-slate-500"
                     )}>
-                    <div className="flex items-start gap-4">
-                      {/* رقم التمرين أو علامة ✓ */}
-                      <div className={cn(
-                        "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-bold",
-                        isPastDay
-                          ? "bg-white/5 text-slate-600"
-                          : ex.done
-                          ? "bg-accent/20 text-accent"
-                          : "bg-white/5 text-slate-500"
-                      )}>
-                        {isPastDay ? <Lock className="h-3.5 w-3.5" /> : ex.done ? "✓" : i + 1}
+                      {isFutureDay ? <Lock className="h-3.5 w-3.5" /> : ex.done ? "✓" : i + 1}
+                    </div>
+
+                    <div className="flex-1">
+                      <div className="flex items-start justify-between">
+                        <h3 className={cn("font-bold", ex.done ? "text-accent" : isFutureDay ? "text-slate-500" : "text-white")}>
+                          {ex.name}
+                        </h3>
+                        <span className="rounded-full border border-white/10 bg-bg px-2 py-0.5 text-xs text-slate-500">
+                          {ex.muscleGroup}
+                        </span>
                       </div>
 
-                      <div className="flex-1">
-                        <div className="flex items-start justify-between">
-                          <h3 className={cn("font-bold", ex.done ? "text-accent" : isPastDay ? "text-slate-500" : "text-white")}>
-                            {ex.name}
-                          </h3>
-                          <span className="rounded-full border border-white/10 bg-bg px-2 py-0.5 text-xs text-slate-500">
-                            {ex.muscleGroup}
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <span className="rounded-full border border-accent/20 bg-accent/5 px-2.5 py-0.5 text-xs text-accent">
+                          {ex.sets} سيت × {ex.reps}
+                        </span>
+                        {ex.rest && (
+                          <span className="rounded-full border border-white/10 bg-bg px-2.5 py-0.5 text-xs text-slate-500">
+                            ⏱️ راحة {ex.rest}
                           </span>
-                        </div>
-
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          <span className="rounded-full border border-accent/20 bg-accent/5 px-2.5 py-0.5 text-xs text-accent">
-                            {ex.sets} سيت × {ex.reps}
-                          </span>
-                          {ex.rest && (
-                            <span className="rounded-full border border-white/10 bg-bg px-2.5 py-0.5 text-xs text-slate-500">
-                              ⏱️ راحة {ex.rest}
-                            </span>
-                          )}
-                        </div>
-
-                        {ex.notes && (
-                          <p className="mt-2 text-xs text-slate-500">💡 {ex.notes}</p>
                         )}
                       </div>
+
+                      {ex.notes && (
+                        <p className="mt-2 text-xs text-slate-500">💡 {ex.notes}</p>
+                      )}
                     </div>
                   </div>
+                </div>
                 );
               })}
             </div>

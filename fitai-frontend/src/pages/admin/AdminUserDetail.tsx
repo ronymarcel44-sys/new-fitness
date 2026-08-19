@@ -44,7 +44,7 @@ export function AdminUserDetail() {
           <h1 className="text-2xl font-black text-white">{user.name}</h1>
           <div className="flex gap-2 mt-1">
             <span className={`text-xs px-2 py-0.5 rounded-full ${user.status === "active" ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"}`}>
-              {user.status === "active" ? "● نشط" : "● موقوف"}
+              {user.status === "active" ? "● نشط" : "● محظور"}
             </span>
             <span className={`text-xs px-2 py-0.5 rounded-full ${user.plan === "premium" ? "bg-yellow-500/20 text-yellow-400" : "bg-slate-700 text-slate-400"}`}>
               {user.plan === "premium" ? "💎 بريميوم" : "مجاني"}
@@ -99,7 +99,7 @@ export function AdminUserDetail() {
                   : "bg-green-500/10 hover:bg-green-500/20 text-green-400"
               }`}
             >
-              {user.status === "active" ? "🚫 إيقاف الحساب" : "✅ تفعيل الحساب"}
+              {user.status === "active" ? "🚫 حظر الحساب" : "✅ رفع الحظر"}
             </button>
           </div>
         </div>

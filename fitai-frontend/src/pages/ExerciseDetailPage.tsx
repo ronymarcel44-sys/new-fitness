@@ -92,7 +92,9 @@ export function ExerciseDetailPage() {
   const exIndex  = exercises.findIndex((e) => e.id === exerciseId);
   const prevEx   = exIndex > 0 ? exercises[exIndex - 1] : null;
   const nextEx   = exIndex < exercises.length - 1 ? exercises[exIndex + 1] : null;
-  const isPastDay = DAYS_ORDER.indexOf(day) < TODAY_IDX;
+  // Logging (marking done / completing sets) is allowed ONLY on today's exercise —
+  // past days are history and future days aren't here yet. Both render read-only.
+  const isToday = day === TODAY;
 
   // ── Sets Tracker — من Redux ──────────────────────────────────────────
   const totalSets   = parseInt(exercise?.sets ?? "0") || 0;
@@ -125,7 +127,7 @@ export function ExerciseDetailPage() {
 
     fetchFromApi(exercise.nameEn || exercise.name);
     fetchAiContent(exercise.nameEn || exercise.name, exercise.muscleGroup, exercise.notes);
-  }, [exerciseId]);
+  }, [exercise, exerciseId]);
 
   // ── reset المؤقت لما يتغير التمرين ─────────────────────────────────
   useEffect(() => {
@@ -162,7 +164,7 @@ export function ExerciseDetailPage() {
   const hasMounted = useRef(false);
   useEffect(() => {
     if (!hasMounted.current) { hasMounted.current = true; return; }
-    if (!exercise || isPastDay) return;
+    if (!exercise || !isToday) return;
     if (totalSets > 0 && completedSets.length === totalSets && !exercise.done) {
       // Auto-log on completion — no weight prompt. Weighted exercises record the
       // heaviest prescribed set; bodyweight exercises record no weight at all.
@@ -189,6 +191,17 @@ export function ExerciseDetailPage() {
     dispatch(toggleDoneThunk({ exerciseId: loggingExercise.id, done: true, ...payload }));
     dispatch(markActiveTodayThunk());
     setLoggingExercise(null);
+  }
+
+  // Undo a completed exercise (today only) — un-marks it and clears set progress
+  // so it can be logged again. This is the only place un-marking now lives.
+  function undoDone(ex: Exercise) {
+    dispatch(toggleDone({ day, exerciseId: ex.id }));         // done: true → false
+    dispatch(toggleDoneThunk({ exerciseId: ex.id, done: false }));
+    dispatch(resetExerciseSets(ex.id));
+    setActiveSet(0);
+    setRestTimer(0);
+    setIsResting(false);
   }
 
   function handleCompleteSet(setIdx: number) {
@@ -450,8 +463,15 @@ export function ExerciseDetailPage() {
         </div>
       )}
 
+      {/* ── تنبيه: التسجيل متاح ليوم اليوم فقط (الأيام الأخرى للعرض فقط) ── */}
+      {!isToday && (
+        <div className="mb-6 flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-bg-card px-5 py-4 text-sm text-slate-400">
+          🔒 تسجيل الإنجاز متاح في يومه فقط
+        </div>
+      )}
+
       {/* ── Sets Tracker (تمارين القوة فقط) ── */}
-      {!isPastDay && exercise.exerciseType !== "cardio" && (
+      {isToday && exercise.exerciseType !== "cardio" && (
         <div className="mb-6 overflow-hidden rounded-2xl border border-white/10 bg-bg-card">
 
           {/* رأس البطاقة */}
@@ -598,14 +618,9 @@ export function ExerciseDetailPage() {
           {exercise.done && (
             <div className="border-t border-white/5 px-5 py-4 text-center">
               <p className="text-sm font-bold text-accent">🎉 أحسنت! أكملت كل السيتات</p>
-              <button onClick={() => {
-                  dispatch(resetExerciseSets(exercise.id));
-                  setActiveSet(0);
-                  setRestTimer(0);
-                  setIsResting(false);
-                }}
+              <button onClick={() => undoDone(exercise)}
                 className="mt-2 text-xs text-slate-600 hover:text-slate-400 transition-colors">
-                إعادة التمرين
+                تراجع عن الإنجاز
               </button>
             </div>
           )}
@@ -613,7 +628,7 @@ export function ExerciseDetailPage() {
       )}
 
       {/* ── تتبع الكارديو (تمارين الكارديو فقط) — NEW (Task 6) ── */}
-      {!isPastDay && exercise.exerciseType === "cardio" && (
+      {isToday && exercise.exerciseType === "cardio" && (
         <div className="mb-6 overflow-hidden rounded-2xl border border-white/10 bg-bg-card p-5">
           <div className="mb-3 flex items-center justify-between">
             <div>
@@ -629,9 +644,15 @@ export function ExerciseDetailPage() {
             )}
           </div>
           {exercise.done ? (
-            <p className="text-sm text-slate-400">
-              سجّلت {exercise.actualDuration ?? "—"} دقيقة لهذا التمرين اليوم 🎉
-            </p>
+            <div>
+              <p className="text-sm text-slate-400">
+                سجّلت {exercise.actualDuration ?? "—"} دقيقة لهذا التمرين اليوم 🎉
+              </p>
+              <button onClick={() => undoDone(exercise)}
+                className="mt-2 text-xs text-slate-600 hover:text-slate-400 transition-colors">
+                تراجع عن الإنجاز
+              </button>
+            </div>
           ) : (
             <button
               onClick={() => setLoggingExercise(exercise)}

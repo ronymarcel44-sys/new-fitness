@@ -14,6 +14,7 @@ export type GoalKey =
 
 export interface UserProfile {
   name: string;
+  status?: string;                   // "active" | "disabled" — drives the ban screen
   age: string;
   weight: string;
   height: string;

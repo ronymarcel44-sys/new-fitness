@@ -20,6 +20,7 @@ interface BackendProfile {
   email:       string;
   role:        string;
   plan:        string;
+  status:      string;
   hasSetup:    boolean;
   age:         number | null;
   height:      number | null;
@@ -117,6 +118,7 @@ function backendToFrontend(data: BackendProfile): Partial<UserProfile> {
     startNeck:         data.startNeck?.toString()     ?? "",
     hasCompletedSetup: data.hasSetup,
     plan:              (data.plan as "free" | "premium") ?? "free",
+    status:            data.status ?? "active",
   };
 }
 

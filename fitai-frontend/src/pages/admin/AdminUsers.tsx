@@ -74,7 +74,7 @@ export function AdminUsers() {
           className="bg-bg-card border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-accent/50">
           <option value="all">كل الحالات</option>
           <option value="active">نشط</option>
-          <option value="disabled">موقوف</option>
+          <option value="disabled">محظور</option>
         </select>
       </div>
 
@@ -116,7 +116,7 @@ export function AdminUsers() {
                     <span className={`text-xs px-3 py-1 rounded-full ${
                       user.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
                     }`}>
-                      {user.status === 'active' ? '● نشط' : '● موقوف'}
+                      {user.status === 'active' ? '● نشط' : '● محظور'}
                     </span>
                   </td>
                   <td className="p-4 text-slate-300">🔥 {user.streak} يوم</td>
@@ -128,7 +128,7 @@ export function AdminUsers() {
                         className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
                           user.status === 'active' ? 'bg-red-500/10 hover:bg-red-500/20 text-red-400' : 'bg-green-500/10 hover:bg-green-500/20 text-green-400'
                         }`}>
-                        {user.status === 'active' ? 'إيقاف' : 'تفعيل'}
+                        {user.status === 'active' ? 'حظر' : 'رفع الحظر'}
                       </button>
                       <button onClick={() => setDeleteTarget(user)} className="text-xs bg-white/5 hover:bg-red-500/10 text-slate-500 hover:text-red-400 px-3 py-1.5 rounded-lg transition-colors">حذف</button>
                     </div>
@@ -165,7 +165,7 @@ export function AdminUsers() {
                 </button>
 
                 <span className={`text-xs px-3 py-1 rounded-full ${user.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                  {user.status === 'active' ? '● نشط' : '● موقوف'}
+                  {user.status === 'active' ? '● نشط' : '● محظور'}
                 </span>
 
                 <span className="text-xs px-3 py-1 rounded-full text-slate-300">🔥 {user.streak} يوم</span>
@@ -173,7 +173,7 @@ export function AdminUsers() {
 
               <div className="mt-3 flex items-center gap-2">
                 <button onClick={() => handleView(user)} className="flex-1 text-sm bg-accent/10 hover:bg-accent/20 text-accent px-3 py-2 rounded-lg">عرض</button>
-                <button onClick={() => handleToggleStatus(user)} className={`flex-1 text-sm px-3 py-2 rounded-lg ${user.status === 'active' ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20' : 'bg-green-500/10 text-green-400 hover:bg-green-500/20'}`}>{user.status === 'active' ? 'إيقاف' : 'تفعيل'}</button>
+                <button onClick={() => handleToggleStatus(user)} className={`flex-1 text-sm px-3 py-2 rounded-lg ${user.status === 'active' ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20' : 'bg-green-500/10 text-green-400 hover:bg-green-500/20'}`}>{user.status === 'active' ? 'حظر' : 'رفع الحظر'}</button>
                 <button onClick={() => setDeleteTarget(user)} className="flex-1 text-sm bg-white/5 hover:bg-red-500/10 text-slate-500 hover:text-red-400 px-3 py-2 rounded-lg">حذف</button>
               </div>
             </div>

@@ -27,6 +27,83 @@ const BUILD_MSG = "خطتك قيد الإنشاء 💪 أمهلني لحظات �
 // Shown as an AI message when the request fails (or the retry also fails)
 const FAIL_MSG = "⚠️ لم أتمكن من الرد الآن، حاول مرة أخرى بعد قليل";
 
+// ── Onboarding answer validation (Fix #5) ────────────────────────────────────
+// The chat is AI-driven with no structured "current field" state, so we detect
+// which question is active from the AI's last message and hard-block physically
+// impossible numbers before they're ever sent — instant feedback, no wasted call.
+// Ranges are never shown to the user (it's their own data). The weight↔height
+// proportion is checked via BMI once height arrives (weight is asked first).
+const AGE_ERR      = "🤔 العمر الذي أدخلته غير منطقي. من فضلك أدخل عمرك الحقيقي.";
+const WEIGHT_ERR   = "🤔 الوزن الذي أدخلته غير منطقي. من فضلك أدخل وزنك الحقيقي بالكيلوغرام.";
+const HEIGHT_ERR   = "🤔 الطول الذي أدخلته غير منطقي. من فضلك أدخل طولك الحقيقي بالسنتيمتر.";
+const MISMATCH_ERR = "🤔 طولك ووزنك لا يتناسبان. من فضلك تأكد من رقميك وأعد إدخال طولك الصحيح.";
+
+// Parse the first number out of an answer, tolerating Arabic-Indic digits and a
+// trailing unit/word ("٨٢ كغ", "82kg", "حوالي 82").
+function parseNum(s: string): number | null {
+  const latin = s.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
+  const m = latin.match(/\d+(?:[.,]\d+)?/);
+  return m ? parseFloat(m[0].replace(",", ".")) : null;
+}
+
+// Which onboarding question is the AI's last message asking? Keyed off the Arabic
+// question words the interview prompt uses. Two exclusions matter:
+//  • the goal proposal/confirmation stage ("هدف") repeats the user's own height/
+//    weight numbers while discussing the goal — it is NOT a measurement question.
+//  • the lifts question also contains "وزنك" — it is NOT the bodyweight question.
+const asksAge    = (t: string) => t.includes("عمرك") && !t.includes("هدف");
+const asksHeight = (t: string) => t.includes("طولك") && !t.includes("هدف");
+const asksWeight = (t: string) =>
+  t.includes("وزنك") &&
+  !t.includes("هدف") &&
+  !t.includes("التمارين الأساسية") &&
+  !t.includes("بنش") &&
+  !t.includes("سكوات");
+
+// The bodyweight the user already gave earlier (for the weight↔height check).
+function weightFromHistory(messages: { role: string; text: string }[]): number | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === "ai" && asksWeight(messages[i].text)) {
+      for (let j = i + 1; j < messages.length; j++) {
+        if (messages[j].role === "user") return parseNum(messages[j].text);
+      }
+    }
+  }
+  return null;
+}
+
+// Returns an Arabic error string if the answer is physically impossible, else null.
+function validateAnswer(
+  lastAiText: string,
+  answer: string,
+  messages: { role: string; text: string }[]
+): string | null {
+  // A measurement answer always contains a number; skip pure-text replies like
+  // "نعم" / "موافق" (e.g. agreeing to a goal, not answering a measurement) so they
+  // can never be misread as an invalid weight/height/age.
+  if (!/[0-9٠-٩]/.test(answer)) return null;
+  const n = parseNum(answer);
+  if (asksAge(lastAiText)) {
+    if (n == null || n < 18 || n > 70) return AGE_ERR;
+  } else if (asksWeight(lastAiText)) {
+    if (n == null || n < 25 || n > 350) return WEIGHT_ERR;
+  } else if (asksHeight(lastAiText)) {
+    if (n == null || n < 120 || n > 220) return HEIGHT_ERR;
+    const w = weightFromHistory(messages);
+    if (w != null) {
+      const bmi = w / ((n / 100) ** 2);
+      if (bmi < 13 || bmi > 60) return MISMATCH_ERR;
+    }
+  }
+  return null;
+}
+
+// Collapse an accidentally repeated adjacent sentence (Fix #1) — the model
+// occasionally emits "ما وزنك؟ما وزنك؟". Display-only; never mutates stored data.
+function dedupeSentences(text: string): string {
+  return text.replace(/(.{5,}?[؟?!.…])\s*\1(?=\s|$)/g, "$1");
+}
+
 export function ChatPage() {
   const dispatch = useAppDispatch();
   const { messages, isLoading, setupComplete, fetched } = useAppSelector((s) => s.chat);
@@ -34,11 +111,17 @@ export function ChatPage() {
   const [input,       setInput]       = useState("");
   const [showConfirm, setShowConfirm] = useState(false);
   const [retryNotice, setRetryNotice] = useState<string | null>(null);
+  const [inputError,  setInputError]  = useState<string | null>(null);
   const bottomRef    = useRef<HTMLDivElement>(null);
   const inputRef     = useRef<HTMLInputElement>(null);
   const initialized  = useRef(false);
   const autoSendRef  = useRef(false);
-  const autoBuildRef = useRef(false);
+  // The id of the confirmation message we've already fired a build for. Tracking
+  // the id (not a bare boolean) lets a genuinely new closing-marker message later
+  // trigger the real build, while never re-firing for the same message — so the
+  // server's "measurements not asked yet" guard can gate a premature marker
+  // without permanently blocking the real build turn.
+  const builtForIdRef = useRef<string | null>(null);
 
   // The AI ends onboarding with a confirmation line ("...هذا هدفك النهائي...") and
   // is forbidden to include the plan JSON in that same message — the plan is built
@@ -87,10 +170,10 @@ export function ChatPage() {
       lastMsg?.role === "ai" &&
       lastMsg.text.includes(GOAL_CONFIRMATION_MARKER) &&
       !parsePlanFromText(lastMsg.text) &&
-      !autoBuildRef.current &&
+      builtForIdRef.current !== lastMsg.id &&
       !isLoading
     ) {
-      autoBuildRef.current = true;
+      builtForIdRef.current = lastMsg.id;
       sendToAI(lastMsg.text);
     }
   }, [messages, isLoading]);
@@ -108,7 +191,10 @@ export function ChatPage() {
   // user had to resend manually. The notice is UI only — never added to
   // `messages`, so it costs no tokens on later turns.
   const MAX_RATE_LIMIT_RETRIES = 2;
-  const callAIWithRetry = async (history: { role: string; text: string }[]): Promise<string> => {
+  const callAIWithRetry = async (
+    history: { role: string; text: string }[],
+    isBuildTurn = false,
+  ): Promise<string> => {
     for (let attempt = 0; ; attempt++) {
       try {
         return await askGemini(history);
@@ -116,9 +202,10 @@ export function ChatPage() {
         const err = e as { status?: number; retryAfter?: number };
         if (err?.status === 429 && attempt < MAX_RATE_LIMIT_RETRIES) {
           const waitSec = Math.min(err.retryAfter ?? 8, 65) + 2;
-          // A long wait means the per-minute budget is resetting (plan-build turn);
-          // reassure the user their plan is being built rather than "service busy".
-          setRetryNotice(waitSec > 12 ? BUILD_MSG : BUSY_MSG);
+          // Only the real plan-build turn shows "your plan is being built"; a slow
+          // ordinary question shows the neutral "service busy" notice instead (Fix
+          // #2 — the build message used to fire on any long wait, even mid-interview).
+          setRetryNotice(isBuildTurn && waitSec > 12 ? BUILD_MSG : BUSY_MSG);
           await new Promise((resolve) => setTimeout(resolve, waitSec * 1000));
           setRetryNotice(null);
           continue; // retry; if attempts run out, the caller shows FAIL_MSG
@@ -131,7 +218,7 @@ export function ChatPage() {
   const sendToAI = async (text: string) => {
     dispatch(setLoading(true));
     try {
-      const reply = await callAIWithRetry(messages.map((m) => ({ role: m.role, text: m.text })));
+      const reply = await callAIWithRetry(messages.map((m) => ({ role: m.role, text: m.text })), true);
       dispatch(addMessage({ role: "ai", text: reply }));
       dispatch(saveMessageThunk({ role: "ai", text: reply }));
       handleParsedPlan(reply, false);
@@ -142,13 +229,27 @@ export function ChatPage() {
       dispatch(setLoading(false));
       setRetryNotice(null);
       autoSendRef.current = false;
-      // autoBuildRef is intentionally NOT reset here — it fires once per session so
-      // a build turn that comes back without JSON can't trigger an auto-retry loop.
+      // builtForIdRef is keyed to the confirmation message's id (see the auto-build
+      // effect), so a build attempt that comes back without JSON won't loop — only a
+      // genuinely new closing-marker message can trigger another build.
     }
   };
 
   const send = async (text: string) => {
     if (!text.trim() || isLoading) return;
+
+    // Fix #5: hard-block physically impossible onboarding answers before sending.
+    // Only during onboarding, and only for the number questions we can recognize
+    // from the AI's last message — everything else passes straight through.
+    if (!setupComplete) {
+      const lastAi = [...messages].reverse().find((m) => m.role === "ai");
+      const err = lastAi ? validateAnswer(lastAi.text, text, messages) : null;
+      if (err) {
+        setInputError(err);
+        return; // keep the user's text in the box so they can fix it
+      }
+    }
+    setInputError(null);
     setInput("");
 
     dispatch(addMessage({ role: "user", text }));
@@ -159,7 +260,7 @@ export function ChatPage() {
       const reply = await callAIWithRetry([
         ...messages.map((m) => ({ role: m.role, text: m.text })),
         { role: "user", text },
-      ]);
+      ], false);
       dispatch(addMessage({ role: "ai", text: reply }));
       dispatch(saveMessageThunk({ role: "ai", text: reply }));
       handleParsedPlan(reply, true);
@@ -338,7 +439,9 @@ export function ChatPage() {
             )}>
               {m.text.startsWith("[تحديث القياسات]")
                 ? m.text.replace("[تحديث القياسات]\n", "📏 تحديث القياسات:\n")
-                : m.text.replace(/```json[\s\S]*?```/g, "\n✅ تم إنشاء خطتك بنجاح! راجع صفحات التمارين والتغذية.")}
+                : m.role === "ai"
+                  ? dedupeSentences(m.text).replace(/```json[\s\S]*?```/g, "\n✅ تم إنشاء خطتك بنجاح! راجع صفحات التمارين والتغذية.")
+                  : m.text}
             </div>
           </div>
         ))}
@@ -370,23 +473,34 @@ export function ChatPage() {
         </div>
       )}
 
-      <div className="flex gap-3 pt-3">
-        <input
-          ref={inputRef}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && send(input)}
-          placeholder="اكتب رسالتك هنا..."
-          disabled={isLoading}
-          className="flex-1 rounded-xl border border-white/10 bg-bg-card px-5 py-3.5 text-sm text-white placeholder:text-slate-600 outline-none transition-all focus:border-accent/50 disabled:opacity-50"
-        />
-        <button
-          onClick={() => send(input)}
-          disabled={isLoading || !input.trim()}
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-accent text-bg transition-all hover:opacity-90 glow disabled:opacity-40"
-        >
-          <Send className="h-4 w-4" />
-        </button>
+      <div className="pt-3">
+        {inputError && (
+          <p className="mb-2 text-xs font-semibold text-red-400">{inputError}</p>
+        )}
+        <div className="flex gap-3">
+          <input
+            ref={inputRef}
+            value={input}
+            onChange={(e) => {
+              setInput(e.target.value);
+              if (inputError) setInputError(null);
+            }}
+            onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && send(input)}
+            placeholder="اكتب رسالتك هنا..."
+            disabled={isLoading}
+            className={cn(
+              "flex-1 rounded-xl border bg-bg-card px-5 py-3.5 text-sm text-white placeholder:text-slate-600 outline-none transition-all focus:border-accent/50 disabled:opacity-50",
+              inputError ? "border-red-500/50" : "border-white/10"
+            )}
+          />
+          <button
+            onClick={() => send(input)}
+            disabled={isLoading || !input.trim()}
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-accent text-bg transition-all hover:opacity-90 glow disabled:opacity-40"
+          >
+            <Send className="h-4 w-4" />
+          </button>
+        </div>
       </div>
     </div>
   );

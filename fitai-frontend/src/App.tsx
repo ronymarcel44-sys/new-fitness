@@ -13,6 +13,7 @@ import { fetchNutritionThunk, fetchMealLogsThunk } from "@/features/nutrition/nu
 import { fetchProgressThunk, fetchActivityThunk, fetchGoalSummaryThunk }  from "@/features/progress/progressSlice";
 import { fetchChatThunk }                          from "@/features/chat/chatSlice";
 import { Navbar }                                  from "@/components/layout/Navbar";
+import { BannedScreen }                            from "@/components/BannedScreen";
 import { CoachChatBubble }                          from "@/components/chat/CoachChatBubble";
 import { CelebrationToast }                          from "@/components/goal/CelebrationToast";
 
@@ -73,6 +74,11 @@ function CoachRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AppLayout({ children }: { children: React.ReactNode }) {
+  // A banned user (status "disabled") can still log in, but every screen is
+  // replaced by the ban notice until an admin lifts it.
+  const status = useAppSelector((s) => s.user.profile.status);
+  if (status === "disabled") return <BannedScreen />;
+
   return (
     <div className="min-h-screen bg-bg font-tajawal text-slate-100">
       <Navbar />
